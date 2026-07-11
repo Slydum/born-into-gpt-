@@ -1,41 +1,32 @@
 # Born Into
 
-A playable browser-based generational life-simulation prototype built with HTML5 Canvas and JavaScript.
+Browser-based generational life-simulation prototype.
 
-## Start the game
+## GitHub Pages
 
-The quickest option is to open `index.html` directly. On Windows, double-click `START_GAME.bat`.
+Upload these files to the repository root:
 
-For a development server:
+- `index.html`
+- `styles.css`
+- `main.js`
+- `.nojekyll` (optional)
 
-```bash
-npm install
-npm run dev
-```
+GitHub Pages should deploy from the `main` branch and `/ (root)` folder.
 
-Then open the local URL printed by Vite.
+## Version 3 fixes
+
+- Full-screen title menu no longer reveals game controls behind it.
+- A fresh save key avoids loading broken prototype saves.
+- Mobile layout reserves separate space for the canvas, information panel, and controls.
+- Direction buttons move once when tapped and continue moving when held.
+- Toddlers are moved away from the crib/sleeping mat when movement unlocks.
+- Parents finish their actions instead of restarting the same action every frame.
+- Work shifts add household money.
+- Grocery and furniture purchases complete and are recorded in Memory.
+- Parents visibly walk to the exit, through town, and into their destination.
+- Furniture uses clearer bedroom, kitchen, dining, and living-room zones.
 
 ## Controls
 
-- **WASD / Arrow keys:** Move after the baby stage
-- **E:** Interact
-- **C:** Cry during the baby stage
-- **Space:** Pause
-- Touch controls appear on narrower screens
-
-## Included systems
-
-- Seeded town generation with home, grocery, school, hospital, workplace, park, and social services
-- Autonomous caregiver utility AI with needs, traits, work, shopping, child care, stress, and arguments
-- Baby care, crying, neglect timer, social-worker dispatch, support, and foster placement
-- Toddler movement, curiosity, household interactions, and hazards
-- Child school attendance, grades, recurring friendship, and conflict events
-- Simplified teen, adult, relationship, career, parenthood, elder, death, and generational handoff systems
-- Persistent family tree data and children
-- Browser `localStorage` save/continue
-- Responsive touch controls
-- Built-in test controls for quickly checking stages and generational continuation
-
-## Notes
-
-This is a vertical slice intended to be expanded. The simulation uses accelerated aging so all life stages can be tested without hours of play. The test controls in the right panel can add one year, trigger an event, add a child, or force death.
+- Desktop: WASD or arrow keys to move, E to interact, C to cry, Space to pause.
+- Mobile: tap or hold the direction buttons. Movement unlocks at the toddler stage.

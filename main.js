@@ -5,7 +5,7 @@ ctx.imageSmoothingEnabled = false;
 const TILE = 32;
 const COLS = 22;
 const ROWS = 18;
-const SAVE_KEY = 'born-into-save-v1';
+const SAVE_KEY = 'born-into-save-v3';
 const SPEEDS = [1, 3, 8];
 
 const dom = Object.fromEntries([
@@ -20,6 +20,17 @@ const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const titleCase = s => s.replace(/\b\w/g, c => c.toUpperCase());
+const parentActionLabel = action => ({
+  'buying a child bed':'Buying your bed',
+  'buying a study desk':'Buying a study desk',
+  'shopping for home decor':'Shopping for the house',
+  'repairing the house':'Repairing the house',
+  'buying groceries':'Buying groceries',
+  'playing with child':'Playing with you',
+  'feeding child':'Feeding you',
+  'comforting child':'Comforting you',
+  'changing child':'Changing you'
+}[action] || titleCase(action || 'Idle'));
 const stageForAge = age => age < 2 ? 'baby' : age < 5 ? 'toddler' : age < 13 ? 'child' : age < 18 ? 'teen' : age < 65 ? 'adult' : 'elder';
 const formatTime = minute => `${String(Math.floor(minute / 60) % 24).padStart(2, '0')}:${String(Math.floor(minute % 60)).padStart(2, '0')}`;
 const formatAge = age => age < 1 ? `${Math.max(0, Math.floor(age * 12))} months` : `${Math.floor(age)} years`;
@@ -233,23 +244,23 @@ function sceneObjects(scene = state?.scene) {
   if (scene === 'home') {
     const upgrades = state.household.upgrades || {};
     const sleepObject = state.player.stage === 'baby'
-      ? {id:'crib',type:'crib',label:'Crib',x:5.5*TILE,y:4*TILE,w:TILE,h:TILE,solid:true}
+      ? {id:'crib',type:'crib',label:'Crib',x:7.5*TILE,y:4*TILE,w:TILE,h:TILE,solid:true}
       : upgrades.childBed
-        ? {id:'childbed',type:'childbed',label:'Your bed',x:6*TILE,y:4*TILE,w:2*TILE,h:TILE,solid:true}
-        : {id:'floorbed',type:'floorbed',label:'Temporary sleeping mat',x:5.8*TILE,y:4*TILE,w:1.6*TILE,h:.8*TILE,solid:true};
+        ? {id:'childbed',type:'childbed',label:'Your bed',x:7.5*TILE,y:4*TILE,w:2*TILE,h:TILE,solid:true}
+        : {id:'floorbed',type:'floorbed',label:'Temporary sleeping mat',x:7.5*TILE,y:4*TILE,w:1.8*TILE,h:.8*TILE,solid:true};
     return [
-      {id:'bed',type:'bed',label:'Parents’ bed',x:3.5*TILE,y:3.5*TILE,w:2*TILE,h:TILE,solid:true},
+      {id:'bed',type:'bed',label:'Parents’ bed',x:3.5*TILE,y:4*TILE,w:2.5*TILE,h:1.2*TILE,solid:true},
       sleepObject,
-      {id:'fridge',type:'fridge',label:'Get food',x:18*TILE,y:3.5*TILE,w:TILE,h:TILE,solid:true},
-      {id:'stove',type:'stove',label:'Touch the stove',x:19*TILE,y:5*TILE,w:TILE,h:TILE,solid:true},
-      {id:'table',type:'table',label:'Sit at the table',x:15*TILE,y:9*TILE,w:3*TILE,h:2*TILE,solid:true},
-      {id:'toy',type:'toy',label:'Play with toy',x:9*TILE,y:11*TILE,w:TILE,h:TILE,solid:false},
-      {id:'book',type:'book',label:upgrades.studyDesk?'Study at your desk':'Look at books',x:3*TILE,y:10*TILE,w:TILE,h:2*TILE,solid:true},
-      ...(upgrades.rug ? [{id:'rug',type:'rug',label:'A warm rug',x:11*TILE,y:12*TILE,w:4*TILE,h:2*TILE,solid:false}] : []),
-      ...(upgrades.sofa ? [{id:'sofa',type:'sofa',label:'Relax on the sofa',x:15*TILE,y:13*TILE,w:3*TILE,h:TILE,solid:true}] : []),
-      ...(upgrades.plant ? [{id:'plant',type:'plant',label:'House plant',x:20*TILE,y:13*TILE,w:TILE,h:TILE,solid:false}] : []),
+      {id:'fridge',type:'fridge',label:'Get food',x:18.5*TILE,y:3*TILE,w:TILE,h:TILE,solid:true},
+      {id:'stove',type:'stove',label:'Touch the stove',x:19*TILE,y:5.5*TILE,w:TILE,h:TILE,solid:true},
+      {id:'table',type:'table',label:'Sit at the table',x:16*TILE,y:8.5*TILE,w:3*TILE,h:1.5*TILE,solid:true},
+      {id:'toy',type:'toy',label:'Play with toy',x:8.5*TILE,y:12.5*TILE,w:TILE,h:TILE,solid:false},
+      {id:'book',type:'book',label:upgrades.studyDesk?'Study at your desk':'Look at books',x:3*TILE,y:12*TILE,w:upgrades.studyDesk?2*TILE:TILE,h:upgrades.studyDesk?1.2*TILE:2*TILE,solid:true},
+      ...(upgrades.rug ? [{id:'rug',type:'rug',label:'A warm rug',x:12*TILE,y:13*TILE,w:4*TILE,h:2*TILE,solid:false}] : []),
+      ...(upgrades.sofa ? [{id:'sofa',type:'sofa',label:'Relax on the sofa',x:17*TILE,y:13*TILE,w:3*TILE,h:TILE,solid:true}] : []),
+      ...(upgrades.plant ? [{id:'plant',type:'plant',label:'House plant',x:20*TILE,y:15*TILE,w:TILE,h:TILE,solid:false}] : []),
       {id:'door',type:'exit',label:'Go outside',x:11*TILE,y:17*TILE,w:TILE,h:TILE,solid:false},
-      ...(state.player.stage === 'adult' ? [{id:'family',type:'family',label:'Talk about starting a family',x:7*TILE,y:3*TILE,w:TILE,h:TILE,solid:false}] : [])
+      ...(state.player.stage === 'adult' ? [{id:'family',type:'family',label:'Talk about starting a family',x:6*TILE,y:9.5*TILE,w:TILE,h:TILE,solid:false}] : [])
     ];
   }
   if (scene === 'town') {
@@ -287,12 +298,40 @@ function sceneBlocks(scene = state?.scene) {
   return sceneObjects(scene).filter(o=>o.solid).map(o=>({x:o.x-o.w/2,y:o.y-o.h/2,w:o.w,h:o.h}));
 }
 
-function collides(x, y, radius = 9) {
-  if (x < radius || y < radius || x > canvas.width-radius || y > canvas.height-radius) return true;
-  for (const b of sceneBlocks()) {
+function collidesInScene(scene, x, y, radius = 9) {
+  const edge = ['town','park'].includes(scene) ? radius : TILE + radius;
+  if (x < edge || y < edge || x > canvas.width-edge || y > canvas.height-edge) return true;
+  for (const b of sceneBlocks(scene)) {
     if (x+radius > b.x && x-radius < b.x+b.w && y+radius > b.y && y-radius < b.y+b.h) return true;
   }
   return false;
+}
+
+function collides(x, y, radius = 9) {
+  return collidesInScene(state?.scene || 'home', x, y, radius);
+}
+
+function findOpenPosition(scene = 'home') {
+  const preferred = scene === 'home'
+    ? [[10.5,12.5],[6.5,12.5],[12,10.5],[9,14.5],[14,15],[5,9.5],[10.5,6.5]]
+    : [[11,15.5],[9,14],[13,14],[11,12]];
+  for (const [tx,ty] of preferred) {
+    const x=tx*TILE, y=ty*TILE;
+    if (!collidesInScene(scene,x,y,11)) return {x,y};
+  }
+  for (let y=2;y<ROWS-2;y++) for (let x=2;x<COLS-2;x++) {
+    const px=(x+.5)*TILE, py=(y+.5)*TILE;
+    if (!collidesInScene(scene,px,py,11)) return {x:px,y:py};
+  }
+  return {x:11*TILE,y:14*TILE};
+}
+
+function ensurePlayerIsWalkable() {
+  if (!state || state.player.stage === 'baby' || state.player.carriedBy) return;
+  if (collidesInScene(state.scene,state.player.x,state.player.y,10)) {
+    const open=findOpenPosition(state.scene);
+    state.player.x=open.x;state.player.y=open.y;
+  }
 }
 
 function setScene(scene, entry = null) {
@@ -338,6 +377,7 @@ function saveGame(showToast = true) {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
     if (showToast) toast('Life saved.');
     dom.continueBtn.disabled = false;
+    dom.continueBtn.hidden = false;
   } catch (err) {
     toast('Save failed in this browser.');
     console.error(err);
@@ -385,10 +425,15 @@ function ensureStateShape() {
     parent.lastWorkDay ??= -1;
     parent.lastErrandDay ??= -1;
     parent.lastDecorDay ??= -1;
+    parent.travelPhase ??= null;
+    parent.travelWaypoints ??= [];
+    parent.destinationLocation ??= parent.travelingTo || null;
+    parent.decisionTimer ??= 0;
     const careNoLongerNeeded = parent.action === 'feeding child' && (state.household.food <= 0 || state.player.needs.satiety >= 55 || !['baby','toddler'].includes(state.player.stage));
-    if (careNoLongerNeeded) { parent.actionTimer = 0; parent.decisionTimer = 0; }
+    if (careNoLongerNeeded) { parent.actionTimer = 0; parent.decisionTimer = 0; parent.action='idle'; }
   });
   state.scene ||= 'home';
+  ensurePlayerIsWalkable();
 }
 
 function updateTime(dt) {
@@ -430,6 +475,15 @@ function changeStage(newStage, oldStage) {
   state.player.stage = newStage;
   state.player.crying = false;
   state.player.carriedBy = null;
+  if (oldStage === 'baby' && newStage === 'toddler') {
+    state.scene = 'home';
+    state.player.location = 'home';
+    const open = findOpenPosition('home');
+    state.player.x = open.x;
+    state.player.y = open.y;
+  } else {
+    ensurePlayerIsWalkable();
+  }
   revealTrait(newStage);
   const copy = {
     toddler: ['First steps', 'You can now move around the house and interact with the world. Curiosity brings discovery—and danger.'],
@@ -549,6 +603,9 @@ function parentActionOptions(parent) {
   const moneyPressure = Math.max(0, 320 - state.household.money);
   const foodPressure = Math.max(0, 8 - state.household.food);
   const upgrades = state.household.upgrades;
+  const parentIndex = Math.max(0,state.parents.indexOf(parent));
+  const careTarget = {x:p.x+(parentIndex===0?-18:18),y:p.y+10};
+  const workTarget = {x:(10.5+parentIndex*1.25)*TILE,y:7*TILE};
   const bedCost = 140;
   const deskCost = 110;
   const decorCost = 80 + upgrades.decorLevel * 45;
@@ -560,7 +617,7 @@ function parentActionOptions(parent) {
     {name:'sleeping',score:(100-n.energy)*1.35 + (hour>22||hour<6?42:0),loc:'home',target:{x:4*TILE,y:4*TILE},duration:6},
     {name:'eating',score:(100-n.satiety)*1.05,loc:'home',target:{x:18*TILE,y:4*TILE},duration:3},
     {name:'buying groceries',score:foodPressure*12 + (state.household.food<3?55:0) + (afterWork?16:0) - (workWindow?12:0),loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:7},
-    {name:'working',score:(workWindow?88:8) + moneyPressure*.16 + parent.traits.workEthic*.5 - (100-n.energy)*.28 - (parent.struggle==='burnout'?14:0),loc:'workplace',target:{x:11*TILE,y:7*TILE},duration:9},
+    {name:'working',score:(workWindow?88:8) + moneyPressure*.16 + parent.traits.workEthic*.5 - (100-n.energy)*.28 - (parent.struggle==='burnout'?14:0),loc:'workplace',target:workTarget,duration:9},
     {name:'relaxing',score:n.stress*.7 + (100-n.mood)*.25 + (!workWindow?8:0),loc:'home',target:{x:14*TILE,y:10*TILE},duration:5},
     {name:'cleaning',score:(100-state.household.cleanliness)*.55 + parent.traits.responsibility*.16 + (!workWindow?8:0),loc:'home',target:{x:12*TILE,y:8*TILE},duration:5},
     {name:'repairing the house',score:state.household.condition<55?(100-state.household.condition)*1.15+parent.traits.responsibility*.2:-999,loc:'home',target:{x:12*TILE,y:8*TILE},duration:7},
@@ -570,28 +627,28 @@ function parentActionOptions(parent) {
     {
       name:'playing with child',
       score: childStageWeight > 0 ? Math.max(0, parent.traits.warmth*.22 + care.mood*1.2 + (afterWork?18:0) + (p.stage==='toddler'?15:0) - n.stress*.18 - (anotherHelping?26:0)) : -999,
-      loc:p.location,target:{x:p.x,y:p.y},duration:4
+      loc:p.location,target:careTarget,duration:4
     },
     {
       name:'feeding child',
       score: (state.household.food > 0 && childStageWeight > 0 && care.satiety > 0)
         ? Math.max(0, care.satiety*3.2*childStageWeight + (p.stage==='baby'?18:0) - careCooldown*2.2 - (anotherHelping?42:0))
         : -999,
-      loc:p.location,target:{x:p.x,y:p.y},duration:3
+      loc:p.location,target:careTarget,duration:3
     },
     {
       name:'comforting child',
       score: childStageWeight > 0
         ? Math.max(0, (p.crying?75:0) + care.comfort*2.6*childStageWeight + parent.traits.warmth*.18 - n.stress*.22 - (anotherHelping?38:0))
         : -999,
-      loc:p.location,target:{x:p.x,y:p.y},duration:3
+      loc:p.location,target:careTarget,duration:3
     },
     {
       name:'changing child',
       score: childStageWeight > 0 && care.hygiene > 0
         ? Math.max(0, care.hygiene*2.8*childStageWeight + parent.traits.responsibility*.15 - (anotherHelping?34:0))
         : -999,
-      loc:p.location,target:{x:p.x,y:p.y},duration:3
+      loc:p.location,target:careTarget,duration:3
     }
   ];
   if (state.parentRelationship && state.parentRelationship.tension > 60) {
@@ -604,21 +661,114 @@ function parentActionOptions(parent) {
   return opts.sort((a,b)=>b.score-a.score);
 }
 
+function worldLocation(type) {
+  return state.world.locations.find(location => location.type === type);
+}
+
+function interiorExitWaypoints(location) {
+  if (location === 'home') return [
+    {x:10.5*TILE,y:10*TILE},
+    {x:11.5*TILE,y:15.5*TILE},
+    {x:11.5*TILE,y:16.7*TILE}
+  ];
+  return [{x:11*TILE,y:13*TILE},{x:11*TILE,y:16.6*TILE}];
+}
+
+function townRoute(parent, destination) {
+  const destinationLot = worldLocation(destination);
+  if (!destinationLot) return [];
+  const destinationDoor = {x:(destinationLot.doorX+.5)*TILE,y:(destinationLot.doorY+1.15)*TILE};
+  const roadX = 11.5*TILE;
+  return [
+    {x:roadX,y:parent.y},
+    {x:roadX,y:destinationDoor.y},
+    destinationDoor
+  ];
+}
+
+function syncCarriedPlayer(parent) {
+  if (!parent.carriedPlayer || state.player.carriedBy !== parent.id) return;
+  state.scene = parent.location;
+  state.player.location = parent.location;
+  state.player.x = parent.x + 12;
+  state.player.y = parent.y + 6;
+}
+
+function beginParentTravel(parent, destination) {
+  parent.travelingTo = destination;
+  parent.destinationLocation = destination;
+  parent.travelPhase = parent.location === 'town' ? 'town' : 'leaving';
+  parent.travelWaypoints = parent.location === 'town'
+    ? townRoute(parent,destination)
+    : interiorExitWaypoints(parent.location);
+}
+
+function moveParentAlongWaypoints(parent, dt, mult) {
+  if (!parent.travelWaypoints?.length) return true;
+  const waypoint = parent.travelWaypoints[0];
+  const dx=waypoint.x-parent.x,dy=waypoint.y-parent.y,d=Math.hypot(dx,dy);
+  const step=58*dt*mult;
+  if(d<=Math.max(5,step)) {
+    parent.x=waypoint.x;parent.y=waypoint.y;
+    parent.travelWaypoints.shift();
+  } else {
+    parent.x+=dx/d*step;parent.y+=dy/d*step;
+  }
+  syncCarriedPlayer(parent);
+  return parent.travelWaypoints.length===0;
+}
+
+function advanceParentTravel(parent, dt, mult) {
+  if (!moveParentAlongWaypoints(parent,dt,mult)) return;
+  if (parent.travelPhase === 'leaving') {
+    const sourceLot = worldLocation(parent.location);
+    parent.location = 'town';
+    parent.x = sourceLot ? (sourceLot.doorX+.5)*TILE : 11.5*TILE;
+    parent.y = sourceLot ? (sourceLot.doorY+1.15)*TILE : 9.5*TILE;
+    parent.travelPhase = 'town';
+    parent.travelWaypoints = townRoute(parent,parent.destinationLocation);
+    syncCarriedPlayer(parent);
+    return;
+  }
+  if (parent.travelPhase === 'town') {
+    parent.location = parent.destinationLocation;
+    parent.x = 11*TILE;
+    parent.y = 16.4*TILE;
+    parent.travelPhase = 'arriving';
+    parent.travelWaypoints = [parent.target || {x:11*TILE,y:8*TILE}];
+    syncCarriedPlayer(parent);
+    return;
+  }
+  if (parent.travelPhase === 'arriving') {
+    parent.travelingTo = null;
+    parent.destinationLocation = null;
+    parent.travelPhase = null;
+    parent.travelWaypoints = [];
+    parent.actionTimer = Math.max(parent.actionTimer,1.5);
+    syncCarriedPlayer(parent);
+  }
+}
+
 function chooseParentAction(parent) {
   const option = parentActionOptions(parent)[0];
   parent.action = option.name;
   parent.target = option.target;
   parent.actionTimer = option.duration;
-  parent.carriedPlayer = false;
+  parent.decisionTimer = option.duration + 4 + rng.next()*3;
+  parent.carriedPlayer = state.player.carriedBy === parent.id;
   if (parent.location !== option.loc) {
-    parent.travelingTo = option.loc;
-    parent.travelTimer = 4 + rng.next()*4;
     const canBring = state.player.stage === 'baby' && state.player.location === parent.location;
     const bringScore = parent.traits.responsibility + parent.traits.warmth - parent.needs.stress - (parent.struggle ? 20 : 0);
     if (canBring && bringScore > 55 && !['working','arguing','withdrawing'].includes(option.name)) {
       parent.carriedPlayer = true;
       state.player.carriedBy = parent.id;
     }
+    beginParentTravel(parent,option.loc);
+  } else {
+    parent.travelingTo = null;
+    parent.destinationLocation = null;
+    parent.travelPhase = null;
+    parent.travelWaypoints = [];
   }
 }
 
@@ -629,11 +779,21 @@ function completeParentAction(parent) {
     case 'eating': if(state.household.food>0){state.household.food--;pn.satiety=clamp(pn.satiety+55);} break;
     case 'buying groceries': {
       const spend = Math.min(state.household.money, rng.int(24,46));
-      state.household.money -= spend; state.household.food += Math.max(3,Math.round(spend/4));
+      const portions = Math.max(3,Math.round(spend/4));
+      state.household.money -= spend; state.household.food += portions;
       parent.lastErrandDay = state.time.totalDays;
+      toast(`${parent.name.split(' ')[0]} bought ${portions} food portions.`);
+      addLog(`${parent.name} spent ${peso(spend)} on groceries.`);
       break;
     }
-    case 'working': state.household.money += rng.int(26,52); pn.energy=clamp(pn.energy-18); pn.stress=clamp(pn.stress+8); parent.lastWorkDay = state.time.totalDays; break;
+    case 'working': {
+      const pay=rng.int(26,52);
+      state.household.money += pay;
+      pn.energy=clamp(pn.energy-18); pn.stress=clamp(pn.stress+8); parent.lastWorkDay = state.time.totalDays;
+      toast(`${parent.name.split(' ')[0]} earned ${peso(pay)} at work.`);
+      addLog(`${parent.name} finished a shift and earned ${peso(pay)}.`);
+      break;
+    }
     case 'relaxing': pn.stress=clamp(pn.stress-28);pn.mood=clamp(pn.mood+18);break;
     case 'cleaning': state.household.cleanliness=clamp(state.household.cleanliness+25);pn.energy=clamp(pn.energy-8);break;
     case 'repairing the house': state.household.condition=clamp(state.household.condition+32);state.household.money=Math.max(0,state.household.money-35);pn.energy=clamp(pn.energy-12);addLog(`${parent.name.split(' ')[0]} repaired worn parts of the house.`);break;
@@ -665,51 +825,70 @@ function updateParents(dt) {
     parent.needs.stress=clamp(parent.needs.stress+dt*mult*(state.household.money<80?.09:.015));
     if (parent.struggle) parent.needs.stress=clamp(parent.needs.stress+dt*mult*.025);
     parent.decisionTimer -= dt*mult;
+
     if (parent.travelingTo) {
-      parent.travelTimer -= dt*mult;
-      if (parent.travelTimer <= 0) {
-        parent.location = parent.travelingTo;
-        parent.travelingTo = null;
-        parent.x = parent.target?.x ?? 11*TILE;
-        parent.y = parent.target?.y ?? 8*TILE;
-        if (parent.carriedPlayer) {
-          state.scene = parent.location;
-          state.player.location = parent.location;
-          state.player.x = parent.x+12; state.player.y=parent.y+6;
-          toast(`${parent.name.split(' ')[0]} brought you to ${locationLabel(parent.location)}.`);
-        }
-      }
+      advanceParentTravel(parent,dt,mult);
       continue;
     }
-    if (parent.actionTimer <= 0 || parent.decisionTimer <= 0) chooseParentAction(parent);
+
+    if (parent.actionTimer <= 0) chooseParentAction(parent);
+
     const sameScene = parent.location === state.scene;
-    if (sameScene && parent.target) {
+    if (parent.target) {
       const dx=parent.target.x-parent.x,dy=parent.target.y-parent.y,d=Math.hypot(dx,dy);
-      if(d>8){parent.x+=dx/d*dt*mult*48;parent.y+=dy/d*dt*mult*48;}
-      else parent.actionTimer-=dt*mult;
-    } else parent.actionTimer-=dt*mult;
-    if(parent.carriedPlayer && state.player.carriedBy===parent.id && sameScene){state.player.x=parent.x+12;state.player.y=parent.y+6;}
+      if(d>8){
+        const step=48*dt*mult;
+        parent.x+=dx/d*Math.min(step,d);
+        parent.y+=dy/d*Math.min(step,d);
+      } else {
+        parent.actionTimer-=dt*mult;
+      }
+    } else {
+      parent.actionTimer-=dt*mult;
+    }
+    if(parent.carriedPlayer && state.player.carriedBy===parent.id){syncCarriedPlayer(parent);}
     if(parent.actionTimer<=0) completeParentAction(parent);
   }
+}
+
+function movePlayerVector(dx,dy,distance) {
+  const p=state?.player;
+  if(!p || p.stage==='baby' || p.carriedBy || modalOpen || !dom.menuOverlay.classList.contains('hidden')) return false;
+  const len=Math.hypot(dx,dy);
+  if(!len)return false;
+  dx/=len;dy/=len;
+  const nx=p.x+dx*distance,ny=p.y+dy*distance;
+  let moved=false;
+  if(!collides(nx,p.y)){p.x=nx;moved=true;}
+  if(!collides(p.x,ny)){p.y=ny;moved=true;}
+  if(moved){
+    p.moving=true;
+    if(Math.abs(dx)>Math.abs(dy))p.dir=dx>0?'right':'left';else p.dir=dy>0?'down':'up';
+  }
+  return moved;
+}
+
+function nudgePlayer(direction) {
+  const vectors={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+  const vector=vectors[direction];
+  if(!vector)return;
+  if(state?.player?.stage==='baby') { toast('You cannot crawl yet. Cry to call a caregiver.'); return; }
+  if(!movePlayerVector(vector[0],vector[1],TILE*.55)) toast('Something is blocking the way.');
+  updateNearby();
 }
 
 function updateMovement(dt) {
   const p = state.player;
   p.moving = false;
-  if (p.stage === 'baby' || p.carriedBy || modalOpen) return;
+  if (p.stage === 'baby' || p.carriedBy || modalOpen || !dom.menuOverlay.classList.contains('hidden')) return;
   let dx=0,dy=0;
   if(keys.has('w')||keys.has('arrowup')||touchDirs.has('up'))dy--;
   if(keys.has('s')||keys.has('arrowdown')||touchDirs.has('down'))dy++;
   if(keys.has('a')||keys.has('arrowleft')||touchDirs.has('left'))dx--;
   if(keys.has('d')||keys.has('arrowright')||touchDirs.has('right'))dx++;
   if(!dx&&!dy)return;
-  const len=Math.hypot(dx,dy);dx/=len;dy/=len;
-  const speed = p.stage==='toddler'?72:108;
-  const nx=p.x+dx*speed*dt,ny=p.y+dy*speed*dt;
-  if(!collides(nx,p.y))p.x=nx;
-  if(!collides(p.x,ny))p.y=ny;
-  p.moving=true;
-  if(Math.abs(dx)>Math.abs(dy))p.dir=dx>0?'right':'left';else p.dir=dy>0?'down':'up';
+  const speed = p.stage==='toddler'?78:112;
+  movePlayerVector(dx,dy,speed*dt);
 
   if (state.scene==='town' && p.stage==='toddler') {
     const onRoad = Math.abs(p.x-11*TILE)<TILE*1.3 || Math.abs(p.y-9*TILE)<TILE*1.3;
@@ -987,7 +1166,7 @@ Tension: ${Math.round(state.parentRelationship.tension)}`
     `Role: ${parent.role || 'Parent'}`,
     `Job: ${titleCase(parent.job || 'Unemployed')}`,
     `Current location: ${titleCase(parent.location)}`,
-    `Current action: ${parent.travelingTo ? `Going to ${titleCase(parent.travelingTo)}` : titleCase(parent.action || 'Idle')}`,
+    `Current action: ${parent.travelingTo ? `Walking to ${titleCase(parent.destinationLocation || parent.travelingTo)}` : parentActionLabel(parent.action)}`,
     `Struggle: ${parent.struggle ? titleCase(parent.struggle) : 'None known'}`,
     '',
     'TRAITS',
@@ -1057,6 +1236,10 @@ function updateUI(force=false) {
   dom.cryBtn.textContent=p.crying?'Crying…':'Cry';
   dom.actionBtn.style.display=p.stage==='baby'?'none':'';
   dom.actionBtn.textContent='Interact';
+  document.querySelectorAll('.dpad button').forEach(button => {
+    button.disabled = p.stage === 'baby';
+    button.title = p.stage === 'baby' ? 'Movement unlocks as a toddler' : 'Move';
+  });
   dom.objectiveText.textContent=objectiveForStage();
   dom.objectiveTag.textContent=p.socialStatus==='dispatched'?'Urgent':p.stage==='baby'?'Growing':'Living';
   dom.familyMood.textContent=state.parentRelationship?(state.parentRelationship.tension>70?'Tense':state.parentRelationship.affection>65?'Warm':'Unsteady'):(state.household.foster?'Foster care':'Single caregiver');
@@ -1065,7 +1248,7 @@ function updateUI(force=false) {
   dom.needsList.innerHTML=needs.map(([label,value])=>`<div class="bar-row"><span>${label}</span><div class="bar-track"><div class="bar-fill ${value<20?'danger':value<40?'warning':''}" style="width:${clamp(value)}%"></div></div><b>${Math.round(value)}</b></div>`).join('');
 
   const family=[
-    ...state.parents.map(parent=>({name:parent.name,role:parent.role||'Parent',action:parent.travelingTo?`Going to ${titleCase(parent.travelingTo)}`:titleCase(parent.action || 'Idle'),onOpen:()=>showParentDetails(parent)})),
+    ...state.parents.map(parent=>({name:parent.name,role:parent.role||'Parent',action:parent.travelingTo?`Walking to ${titleCase(parent.destinationLocation || parent.travelingTo)}`:parentActionLabel(parent.action),onOpen:()=>showParentDetails(parent)})),
     ...p.children.map(child=>({name:child.name,role:`Child · ${formatAge(child.age)}`,action:titleCase(child.stage),onOpen:()=>showChildDetails(child)}))
   ];
   if(p.partner)family.push({name:p.partner.name,role:'Partner',action:`Affection ${Math.round(p.partner.affection)}`,onOpen:()=>showChildDetails({...p.partner,age:p.age,stage:'adult'})});
@@ -1170,7 +1353,12 @@ function drawObjects(){
 }
 
 function drawCharacters(){
-  for(const parent of state.parents){if(parent.location===state.scene&&!parent.travelingTo)drawPerson(parent.x,parent.y,'adult',parent.id===state.player.carriedBy?'#9c6b78':'#557d8e',false,parent.action);}
+  for(const parent of state.parents){
+    if(parent.location===state.scene){
+      const label=parent.travelingTo?`walking to ${titleCase(parent.destinationLocation || parent.travelingTo)}`:parentActionLabel(parent.action).toLowerCase();
+      drawPerson(parent.x,parent.y,'adult',parent.id===state.player.carriedBy?'#9c6b78':'#557d8e',false,label);
+    }
+  }
   if(state.scene==='park')drawPerson(7*TILE,8*TILE,'child','#b26d69',false,'friend');
   if(state.scene==='school')drawPerson(11*TILE,3*TILE,'adult','#6d759b',false,'teacher');
   if(state.scene==='hospital')drawPerson(11*TILE,6*TILE,'adult','#d7e7df',false,'doctor');
@@ -1231,12 +1419,17 @@ function drawSplash(){
 }
 
 function openNewGame(){
+  document.body.classList.add('menu-open');
   dom.mainMenuButtons.classList.add('hidden');dom.howPanel.classList.add('hidden');dom.newGameForm.classList.remove('hidden');dom.menuOverlay.classList.remove('hidden');dom.menuOverlay.classList.add('visible');
 }
 function openMainMenu(){
-  dom.newGameForm.classList.add('hidden');dom.howPanel.classList.add('hidden');dom.mainMenuButtons.classList.remove('hidden');dom.menuOverlay.classList.remove('hidden');dom.menuOverlay.classList.add('visible');dom.continueBtn.disabled=!storageGet(SAVE_KEY);
+  document.body.classList.add('menu-open');
+  const hasSave=!!storageGet(SAVE_KEY);
+  dom.newGameForm.classList.add('hidden');dom.howPanel.classList.add('hidden');dom.mainMenuButtons.classList.remove('hidden');dom.menuOverlay.classList.remove('hidden');dom.menuOverlay.classList.add('visible');
+  dom.continueBtn.disabled=!hasSave;
+  dom.continueBtn.hidden=!hasSave;
 }
-function closeMenu(){dom.menuOverlay.classList.add('hidden');dom.menuOverlay.classList.remove('visible');lastTime=performance.now();}
+function closeMenu(){document.body.classList.remove('menu-open');dom.menuOverlay.classList.add('hidden');dom.menuOverlay.classList.remove('visible');lastTime=performance.now();}
 
 function bindPress(element, handler) {
   if (!element) return;
@@ -1266,9 +1459,18 @@ function bindEvents(){
   window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
   document.querySelectorAll('.dpad button').forEach(btn=>{
     const dir=btn.dataset.dir;
-    for(const ev of ['pointerdown','touchstart'])btn.addEventListener(ev,e=>{e.preventDefault();touchDirs.add(dir);});
-    for(const ev of ['pointerup','pointercancel','pointerleave','touchend'])btn.addEventListener(ev,e=>{e.preventDefault();touchDirs.delete(dir);});
+    btn.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      btn.setPointerCapture?.(e.pointerId);
+      touchDirs.add(dir);
+      nudgePlayer(dir);
+    },{passive:false});
+    for(const ev of ['pointerup','pointercancel','lostpointercapture'])btn.addEventListener(ev,e=>{
+      e.preventDefault();
+      touchDirs.delete(dir);
+    },{passive:false});
   });
+  window.addEventListener('pointerup',()=>touchDirs.clear());
   bindPress(dom.actionBtn, interact); bindPress(dom.cryBtn, cry);
   bindPress(dom.pauseBtn, togglePause);
   bindPress(dom.speedBtn, ()=>{speedIndex=(speedIndex+1)%SPEEDS.length;dom.speedBtn.textContent=`${SPEEDS[speedIndex]}×`;toast(`Simulation speed ${SPEEDS[speedIndex]}×`);});
