@@ -1,17 +1,27 @@
-# V7 test notes
+# V7.1 test notes
 
-The build was checked with Node syntax validation for every JavaScript module and deterministic multi-year simulation runs using several seeds.
+## Automated checks completed
 
-Covered scenarios:
+- JavaScript syntax check for every source module.
+- 80 deterministic new-life seeds checked for:
+  - parent ages at the player’s birth;
+  - valid older-sibling timelines;
+  - family-home residence initialization;
+  - assigned bed capacity;
+  - removal of unassigned duplicate beds;
+  - furniture sprite resolution.
+- Same-home family messages checked to ensure neither side uses “I miss you” dialogue.
+- Death transition checked for job removal, schedule cancellation, archived contact, removed map presence, and family-tree update.
+- Adult work-path move-out checked for:
+  - creation of a playable apartment;
+  - player transfer and assigned bed;
+  - preserved family home;
+  - visiting family and returning home;
+  - correct save rehydration.
+- Multi-day simulation smoke test completed without runtime state errors.
+- Biological family planning tested with both parents aged 72; no pregnancy is created.
+- All 30 furniture PNGs checked for RGBA transparency and valid file paths.
 
-- New-life generation with child, teen, adult, and moved-out siblings
-- Stable class roster and friendship development before age 11
-- Phone messages and accepted invitations leading to a park meeting
-- Age-18 adulthood choice and residence transition
-- Teen-room and second-floor construction through completion
-- Floor activation and room assignment after construction
-- Parent infidelity discovery and separate sleeping assignment
-- Meal phases clearing visible food and preserving leftovers
-- Major-event cooldowns, health conditions, and recovery updates
+## New save required
 
-The browser UI is designed for static hosting through a local HTTP server or GitHub Pages.
+V7.1 uses `born-into-save-v71`. Begin a new life after deployment.

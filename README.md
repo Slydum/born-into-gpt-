@@ -1,63 +1,64 @@
-# Born Into V7 — Generations & Relationships
+# Born Into V7.1 — Continuity & Homes
 
-A mobile-friendly top-down generational life simulation. A new life begins inside a generated family with its own parents, siblings, wealth, childcare plan, home, relationships, and history.
+A mobile-first autonomous life simulation. V7.1 focuses on keeping every system consistent when people age, die, move away, visit family, replace furniture, and begin adult life.
 
-## V7 highlights
+## V7.1 highlights
 
-### Homes that belong to people
+- One residence model shared by movement, schedules, phone messages, jobs, family panels, and rendering.
+- Death cleanup: deceased people stop moving, working, earning, parenting, and replying to messages. Their contact is memorialized and their family-tree history remains.
+- Context-aware messaging: relatives in the same home no longer send long-distance “I miss you” dialogue.
+- Chronological family generation with parents aged 24–46 when the player is born and older siblings constrained by that timeline.
+- Biological family planning requires a living female adult aged 18–45; unusual older-parent households can still be represented through prior history, adoption, or guardianship stories later.
+- Adult move-out creates a playable student apartment, shared apartment, or boarding residence. The family home remains preserved and visitable.
+- Official residence and current location are separate, so an adult can visit family without moving back permanently.
+- Assigned beds and bedroom cleanup. Duplicate, replaced, and outgrown beds are transferred to household storage rather than accumulating in rooms.
+- Furniture ownership follows characters when portable belongings are moved.
+- Thirty transparent furniture sprites extracted from the supplied bedroom and living-room sheets.
+- Sprite-backed beds, cribs, bunk beds, wardrobes, desks, sofas, chairs, coffee tables, rugs, lamps, plants, bookshelves, televisions, and wall art.
+- Household style profiles choose coherent furniture variants by wealth, palette, layout, and home style.
 
-- Household members receive assigned bedrooms, beds, and dining seats.
-- Sleeping characters are positioned inside their assigned mattress, crib, or sofa slot.
-- Partners occupy separate sides of a double bed unless conflict makes one sleep elsewhere.
-- Hobby equipment is purchased only after repeated practice and is placed in the owner’s bedroom or an unlocked hobby room.
-- Teen-bedroom extensions and second-floor projects persist until completion.
-- Completed second floors include two bedrooms, a bathroom, a hobby room, stairs, and floor switching.
+## Project structure
 
-### Household routines
-
-- Breakfast, lunch, and dinner move through planning, cooking, serving, eating, leftovers, clearing, and dishes.
-- Food is visible only while a meal is served.
-- Laundry, dishes, trash, floors, and bathrooms create recurring chores.
-- Nannies, stay-at-home parents, and available off-duty parents are prioritized for childcare; workers cannot simultaneously care for a baby from another location.
-
-### Persistent social life
-
-- School-age characters receive a stable class roster.
-- Recess, lunch, school encounters, clubs, parks, and invitations create repeated contact.
-- Relationships progress through familiar face, acquaintance, friend, and close friend states.
-- The phone supports contacts, message threads, delayed replies, family check-ins, and invitations.
-- Accepted invitations create a scheduled physical meeting at the park.
-
-### Generations and adulthood
-
-- The player can be born with younger, teenage, or adult older siblings.
-- Adult siblings may already live in a dormitory, boarding house, or shared apartment when the player is born.
-- At age 18, the player chooses college, full-time work, or trade training and receives a new residence record.
-- NPC siblings make their own move-out decisions and remain reachable through the family and phone systems.
-
-### Mood, health, romance, and major events
-
-- Current mood and its causes are shown separately from long-term traits.
-- Configurable event chains include flu, serious illness, accidents, temporary or permanent disability, pregnancy, teen pregnancy, unexpected death, and grief.
-- Teen romance supports age-appropriate crushes, dating, and first-kiss memories.
-- Adult intimacy is optional and represented only with fade-to-black text.
-- Exclusive partners and married parents can be unfaithful; discovery damages trust and can change sleeping arrangements.
-- Substance-related events focus on refusal, experimentation, consequences, and risk rather than instructions.
+```text
+index.html
+styles.css
+.nojekyll
+package.json
+assets/
+  furniture/
+src/
+  art.js
+  config.js
+  data.js
+  furniture.js
+  main.js
+  render.js
+  simulation.js
+  state.js
+  ui.js
+  utils.js
+  v7.js
+  world.js
+```
 
 ## Run locally
 
 ```bash
-python -m http.server 8000
+npm run dev
 ```
 
-Open `http://localhost:8000`.
+Then open `http://localhost:8000`.
 
 ## GitHub Pages
 
-Upload the project exactly as extracted. Keep the `src` folder beside `index.html`. Delete any obsolete root-level `main.js` from older builds.
+Upload the complete project while preserving the `assets/furniture` and `src` directories. The repository root should contain `index.html` and `.nojekyll`.
 
-V7 uses a new save key. Start a new life after replacing V6 so the family history, room assignments, social roster, phone, event settings, and adulthood data are generated correctly.
+V7.1 uses a new save key. Begin a new life after replacing V7 so residence records, furniture ownership, realistic family ages, and continuity data are generated correctly.
 
-## Current scope note
+## Checks
 
-V7 creates adult move-out choices, residence records, expenses, continuing relatives, and phone contact. Dormitories and separate apartments are not yet rendered as fully navigable interior maps; the detailed playable map remains the family home and town locations.
+```bash
+npm run check
+```
+
+The included implementation was also tested with deterministic state tests covering family timelines, assigned beds, same-home messaging, death cleanup, adult move-outs, residence switching, save rehydration, asset paths, and a multi-day simulation smoke test.

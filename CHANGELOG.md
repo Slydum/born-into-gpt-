@@ -1,29 +1,26 @@
-# Changelog
+# 7.1.0 — Continuity & Homes
 
-## 7.0.0 — Generations & Relationships
+- Added a single authoritative household and residence model.
+- Added fully playable starter residences after the player moves out at 18.
+- Preserved the family home as a separate visitable residence.
+- Separated official residence from current visit location.
+- Fixed deceased people continuing to work, move, earn money, or reply to messages.
+- Added memorialized phone contacts and widowed relationship state.
+- Made phone dialogue aware of same-home, nearby, away, busy, and deceased contexts.
+- Limited biological family planning to living female adults aged 18–45.
+- Prevented dead characters from continuing to age.
+- Increased the default life-year duration from two to four game days.
+- Added bed-capacity reconciliation and storage for outgrown or duplicate beds.
+- Added portable furniture transfer during adult move-out.
+- Added thirty transparent furniture sprite assets from the provided sheets.
+- Added sprite selection by household style, wealth, palette, and furniture purpose.
+- Added sprite rendering for beds, cribs, bunk beds, storage, desks, living-room furniture, rugs, plants, lamps, and wall art.
 
-- Added assigned bedrooms, bed slots, dining seats, and sleeping inside furniture.
-- Added relationship-driven separate sleeping after discovered infidelity.
-- Added second-floor construction with persistent progress, stairs, bedrooms, bathroom, hobby room, and floor controls.
-- Moved dedicated hobby equipment into its owner’s bedroom or an unlocked hobby room.
-- Added meal clearing, leftovers, dishes, and shorter visible food windows.
-- Added persistent classmates, scheduled school social moments, recurring clubs, friendship progression, and planned park meetings.
-- Added phone contacts, message threads, delayed replies, family messages, and invitations.
-- Added pre-birth family history with adult siblings who may already live elsewhere.
-- Added age-18 college, work, and trade choices with move-out residences.
-- Added current mood causes, illnesses, accidents, disability, pregnancy, unexpected death, grief, and event-frequency settings.
-- Added age-appropriate teen romance, adult fade-to-black milestones, cheating, and relationship consequences.
-- Added substance-related refusal and consequence events.
-- Added Social and Life panels and expanded character profiles.
+# 7.0.1 — Mobile menu hotfix
 
-## 6.0.0 — Household Life
+- Made the legacy-save notice dismissible.
+- Prevented the warning from covering the mobile menu.
 
-- Added seeded home-layout variation and room-relative furniture placement.
-- Rebuilt childcare assignment so unavailable workers cannot provide care.
-- Added household meals, visible servings, shared dining, dishes, groceries, and kitchen inventory.
-- Added laundry, trash, floor mess, bathroom mess, and chore routines.
-- Added hobby equipment purchases, skill practice, painting creation, and artwork sales.
-- Added home and public conversations, speech bubbles, acquaintances, affection, trust, and friendship progression.
-- Added visible player traits, interests, and skill progress.
-- Made construction persistent and layout-aware through completion.
-- Improved mobile day, week, and time visibility.
+# 7.0.0 — Generations & Relationships
+
+- Added assigned beds, multi-floor homes, persistent friendships, phones, adult transitions, older siblings, romance, health, and major life events.

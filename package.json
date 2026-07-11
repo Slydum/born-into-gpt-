@@ -1,10 +1,10 @@
 {
   "name": "born-into",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "python -m http.server 8000",
-    "check": "node --check src/main.js && node --check src/state.js && node --check src/simulation.js && node --check src/v7.js && node --check src/render.js && node --check src/ui.js && node --check src/world.js"
+    "check": "node --check src/main.js && node --check src/state.js && node --check src/simulation.js && node --check src/v7.js && node --check src/furniture.js && node --check src/render.js && node --check src/ui.js && node --check src/world.js"
   }
 }
