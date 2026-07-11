@@ -1,0 +1,9 @@
+Upload these paths to the matching locations in your repository:
+
+index.html
+package.json
+src/furniture.js
+assets/furniture/living-room-sheet.png
+
+Keep the folders exactly as shown.
+Then open the GitHub Pages site with ?v=711 to bypass the old browser cache.
