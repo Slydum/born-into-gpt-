@@ -1,6 +1,7 @@
 import { seededPhase } from './utils.js';
 
 const ASSET_ROOT = 'assets/character';
+const ASSET_VERSION = '75';
 
 export const CHARACTER_SPRITE_SHEETS = {
   toddler: {
@@ -41,6 +42,18 @@ export const CHARACTER_SPRITE_SHEETS = {
   }
 };
 
+function spriteStage(stage = 'adult') {
+  if (stage === 'baby') return 'toddler';
+  if (stage === 'elder') return 'adult';
+  return CHARACTER_SPRITE_SHEETS[stage] ? stage : 'adult';
+}
+
+function stageScale(stage = 'adult') {
+  if (stage === 'baby') return 0.68;
+  if (stage === 'elder') return 0.92;
+  return 1;
+}
+
 function normalizePresentation(person) {
   return person?.appearance?.presentation === 'feminine' ? 'feminine' : 'masculine';
 }
@@ -49,8 +62,8 @@ function normalizeDirection(direction = 'down') {
   return ['up', 'left', 'right'].includes(direction) ? direction : 'down';
 }
 
-function getFrameIndex(person, animationClock) {
-  if (!person?.moving) return 0;
+function getFrameIndex(person, animationClock, pose) {
+  if (pose !== 'standing' || !person?.moving) return 0;
   const phase = seededPhase(person.id || person.name || 'resident');
   return 1 + (Math.floor(animationClock * 7 + phase * 10) % 3);
 }
@@ -61,44 +74,67 @@ export function preloadCharacterSprites() {
   for (const [stage, sheet] of Object.entries(CHARACTER_SPRITE_SHEETS)) {
     const image = new Image();
     image.decoding = 'async';
-    image.src = sheet.path;
+    image.src = `${sheet.path}?v=${ASSET_VERSION}`;
     images.set(stage, image);
   }
   return images;
 }
 
 export function drawCharacterSprite(ctx, images, person, animationClock, options = {}) {
-  // The uploaded set covers these four stages. Baby, elder, sleeping, and sitting
-  // continue using the existing renderer until matching poses are available.
-  if (!images || !CHARACTER_SPRITE_SHEETS[person?.stage] || ['sleeping', 'sitting'].includes(options.pose)) return null;
+  if (!images || !person) return null;
 
-  const stage = person.stage;
+  const originalStage = person.stage || 'adult';
+  const stage = spriteStage(originalStage);
   const sheet = CHARACTER_SPRITE_SHEETS[stage];
   const image = images.get(stage);
-  if (!image?.complete || !image.naturalWidth) return null;
+  if (!sheet || !image?.complete || !image.naturalWidth) return null;
 
+  const pose = options.pose || 'standing';
   const presentation = normalizePresentation(person);
-  const direction = normalizeDirection(person.dir);
-  const frame = getFrameIndex(person, animationClock);
+  const direction = pose === 'sleeping' ? 'left' : normalizeDirection(person.dir);
+  const frame = getFrameIndex(person, animationClock, pose);
   const crop = sheet.box[presentation];
   const sx = crop.x[frame];
   const sy = crop.y[direction];
   const sw = crop.w;
   const sh = crop.h[direction];
-  const drawHeight = sheet.targetHeight;
-  const drawWidth = Math.round(sw * (drawHeight / sh));
+
+  let scale = stageScale(originalStage);
+  if (pose === 'sitting') scale *= 0.82;
+  if (pose === 'sleeping') scale *= 0.88;
+
+  const drawHeight = sheet.targetHeight * scale;
+  const drawWidth = sw * (drawHeight / sh);
   const x = Math.round(person.x);
-  const groundY = Math.round(person.y + sheet.groundOffset);
+  const y = Math.round(person.y);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  if (pose === 'sleeping') {
+    ctx.translate(x, y);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    if (options.highlight) {
+      ctx.strokeStyle = '#f5cf73';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-drawWidth / 2 - 3, -drawHeight / 2 - 3, drawWidth + 6, drawHeight + 6);
+    }
+    ctx.restore();
+    return { x, y, width: drawHeight + 6, height: drawWidth + 6 };
+  }
+
+  const groundOffset = sheet.groundOffset * scale;
+  const groundY = Math.round(y + groundOffset + (pose === 'sitting' ? 4 : 0));
   const dx = Math.round(x - drawWidth / 2);
   const dy = Math.round(groundY - drawHeight);
 
-  ctx.save();
   ctx.fillStyle = 'rgba(23,32,51,.18)';
   ctx.beginPath();
-  ctx.ellipse(x, groundY - 1, Math.max(8, drawWidth * 0.26), Math.max(3, drawHeight * 0.06), 0, 0, Math.PI * 2);
+  ctx.ellipse(x, groundY - 1, Math.max(6, drawWidth * 0.26), Math.max(2, drawHeight * 0.06), 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.imageSmoothingEnabled = true;
   ctx.drawImage(image, sx, sy, sw, sh, dx, dy, drawWidth, drawHeight);
+
   if (options.highlight) {
     ctx.strokeStyle = '#f5cf73';
     ctx.lineWidth = 2;
@@ -106,10 +142,5 @@ export function drawCharacterSprite(ctx, images, person, animationClock, options
   }
   ctx.restore();
 
-  return {
-    x,
-    y: dy + drawHeight / 2,
-    width: drawWidth + 4,
-    height: drawHeight + 4
-  };
+  return { x, y: dy + drawHeight / 2, width: drawWidth + 6, height: drawHeight + 6 };
 }
