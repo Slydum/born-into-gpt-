@@ -245,12 +245,25 @@ export class Simulation {
 
   updateFamilyAgents(realDt, gameMinutes) {
     this.releaseExpiredCareLock();
+
+    // Keep an agent's trip/activity running after they leave the visible home.
+    // Previously, agents were only updated while physically inside the active
+    // residence. The instant they stepped into town, their route and activity
+    // froze forever, so they never completed work/shopping or came home.
+    const shouldAdvance = person => {
+      if (!person || person.alive === false) return false;
+      if (isPersonAtActiveResidence(this.state, person)) return true;
+      if (person.location !== 'home') return true;
+      if (person.route || person.currentGoal) return true;
+      return Boolean(person.activity && person.activity.type !== 'waiting');
+    };
+
     for (const parent of this.state.parents) {
-      if (isPersonAtActiveResidence(this.state, parent)) this.updateParent(parent, realDt, gameMinutes);
+      if (shouldAdvance(parent)) this.updateParent(parent, realDt, gameMinutes);
     }
-    if (this.state.nanny && isPersonAtActiveResidence(this.state, this.state.nanny)) this.updateNanny(this.state.nanny, realDt, gameMinutes);
+    if (shouldAdvance(this.state.nanny)) this.updateNanny(this.state.nanny, realDt, gameMinutes);
     for (const sibling of this.state.siblings) {
-      if (isPersonAtActiveResidence(this.state, sibling)) this.updateSibling(sibling, realDt, gameMinutes);
+      if (shouldAdvance(sibling)) this.updateSibling(sibling, realDt, gameMinutes);
     }
   }
 
@@ -715,8 +728,11 @@ export class Simulation {
         phase: person.location === 'town' ? 'acrossTown' : 'toExit',
         target: person.location === 'town' ? getTownDoorPoint(this.state, nextGoal.destination) : getSceneExitPoint(person.location)
       };
-      person.activity = activity('commuting', 0, { goalType: nextGoal.type });
+      // Decide whether the assigned caregiver brings the baby before marking
+      // the caregiver as commuting. Otherwise availability checks reject the
+      // caregiver and the baby is incorrectly left behind.
       this.maybeCarryBaby(person, nextGoal);
+      person.activity = activity('commuting', 0, { goalType: nextGoal.type });
       return;
     }
     if (nextGoal.beginWorkOnArrival && nextGoal.shift && person.location === nextGoal.destination) {
@@ -750,9 +766,30 @@ export class Simulation {
     }
   }
 
+
+  releaseCarriedBabyAtHome(person, currentGoal) {
+    const player = this.state.player;
+    if (player.carriedBy !== person.id || person.location !== 'home') return;
+    const keepCarrying = ['feeding','changing','comforting','playing','childcare'].includes(currentGoal.type);
+    if (keepCarrying) return;
+
+    player.carriedBy = null;
+    player.location = 'home';
+    player.currentResidenceId = person.currentResidenceId || person.officialResidenceId || this.state.activeResidenceId || 'familyHome';
+    const sleepPoint = getActivityPoint(this.state, player, 'sleeping', goal('sleeping', 'home', 20, 0));
+    const preferred = sleepPoint || { x: person.x + 14, y: person.y + 8 };
+    const safe = findSafePoint(this.state, 'home', preferred);
+    player.x = safe.x;
+    player.y = safe.y;
+    player.route = null;
+    player.currentGoal = null;
+    player.activity = activity('waiting', 0);
+  }
+
   startGoalActivity(person, currentGoal) {
     person.route = null;
     person.moving = false;
+    this.releaseCarriedBabyAtHome(person, currentGoal);
     person.activity = activity(currentGoal.type, currentGoal.duration, {
       startedStamp: this.gameStamp,
       endStamp: currentGoal.shift?.endStamp || null,
