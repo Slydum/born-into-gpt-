@@ -287,3 +287,38 @@ canvas { display: block; width: 100%; height: 100%; background: #2c3a4b; image-r
   .intent-copy strong { max-width: 110px; }
   .intent-actions button { padding: 0 6px; }
 }
+
+/* V5 procedural portrait layers */
+.generated-portrait { --skin:#e8b788; --hair:#3b2923; --top:#7198ab; --bottom:#26384a; position:relative; width:100%; height:100%; overflow:hidden; background:linear-gradient(#e8ddcb,#d9cbb6); }
+.generated-portrait .portrait-head { position:absolute; left:50%; top:22%; width:40%; aspect-ratio:1; transform:translateX(-50%); border-radius:48% 48% 44% 44%; background:var(--skin); border:2px solid #172033; z-index:3; }
+.generated-portrait .portrait-head i,.generated-portrait .portrait-head b { position:absolute; top:43%; width:8%; aspect-ratio:1; border-radius:50%; background:#172033; }
+.generated-portrait .portrait-head i { left:26%; }.generated-portrait .portrait-head b { right:26%; }
+.generated-portrait .portrait-head::after { content:""; position:absolute; left:40%; bottom:18%; width:20%; height:8%; border-bottom:2px solid #8f5344; border-radius:50%; }
+.generated-portrait .portrait-hair { position:absolute; left:50%; top:17%; width:45%; height:28%; transform:translateX(-50%); border-radius:55% 55% 30% 30%; background:var(--hair); z-index:4; }
+.generated-portrait[data-hair="none"] .portrait-hair { display:none; }
+.generated-portrait[data-hair="bob"] .portrait-hair,.generated-portrait[data-hair="long"] .portrait-hair { height:48%; border-radius:55% 55% 35% 35%; }
+.generated-portrait[data-hair="ponytail"] .portrait-hair::after { content:""; position:absolute; right:-18%; top:12%; width:26%; height:55%; border-radius:50%; background:var(--hair); }
+.generated-portrait[data-hair="bun"] .portrait-hair::after { content:""; position:absolute; left:36%; top:-28%; width:28%; aspect-ratio:1; border-radius:50%; background:var(--hair); }
+.generated-portrait[data-hair="braid"] .portrait-hair::after { content:""; position:absolute; right:-8%; top:55%; width:13%; height:48%; border-radius:45%; background:var(--hair); }
+.generated-portrait .portrait-body { position:absolute; left:50%; bottom:-5%; width:66%; height:48%; transform:translateX(-50%); border-radius:35% 35% 8% 8%; background:linear-gradient(var(--top) 0 62%,var(--bottom) 62%); border:2px solid #172033; z-index:2; }
+.generated-portrait[data-stage="baby"] .portrait-body { width:55%; height:40%; border-radius:48%; background:var(--top); }
+.generated-portrait[data-stage="toddler"] .portrait-body { width:58%; height:43%; }
+.generated-portrait[data-stage="elder"] .portrait-head::before { content:""; position:absolute; inset:10% 15%; border-top:1px solid rgba(90,65,55,.35); border-bottom:1px solid rgba(90,65,55,.25); }
+.generated-portrait[data-accessory="glasses"] .portrait-head { box-shadow:inset 8px 0 0 transparent; }
+.generated-portrait[data-accessory="glasses"] .portrait-head::before { content:"○  ○"; position:absolute; left:13%; top:30%; color:#172033; font:700 12px/1 ui-monospace,monospace; letter-spacing:2px; z-index:5; }
+.generated-portrait[data-accessory="cap"] .portrait-hair::before { content:""; position:absolute; left:-8%; right:-8%; top:-10%; height:38%; border-radius:50% 50% 20% 20%; background:#435c76; }
+.generated-portrait[data-accessory="headband"] .portrait-hair::before { content:""; position:absolute; left:4%; right:4%; top:20%; height:8%; background:#d98c9a; }
+.portrait > .generated-portrait { position:absolute; inset:0; }
+.mini-portrait { width:100%; height:100%; border:0; }
+.profile-avatar.portrait-profile { padding:0; overflow:hidden; background:transparent; }
+.profile-portrait { width:100%; height:100%; }
+.family-context { margin-bottom:12px; padding:12px; background:#eee5d5; border:1px solid var(--line); }
+.family-context > div { display:flex; justify-content:space-between; gap:10px; padding:5px 0; }
+.family-context span { color:#756d64; font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
+.family-context strong { text-align:right; }
+.family-context p { margin:8px 0 0; color:#665f56; font:12px/1.45 system-ui,sans-serif; }
+.family-history { margin-top:14px; padding-top:12px; border-top:2px solid var(--line); }
+.family-history h4 { margin:0 0 8px; }
+.family-history p { margin:5px 0; color:#665f56; font:12px/1.4 system-ui,sans-serif; }
+.family-avatar { overflow:hidden; padding:0 !important; }
+.portrait.generated-host::before,.portrait.generated-host::after { display:none; }
