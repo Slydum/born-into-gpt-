@@ -2,77 +2,82 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#1d2636" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#172033" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Born Into — Generational Life Sim</title>
-  <script>
-    window.__BORN_INTO_READY__ = false;
-    window.__showBornIntoError = function (message) {
-      window.addEventListener('DOMContentLoaded', function () {
-        var box = document.getElementById('startupError');
-        if (!box) return;
-        box.textContent = message;
-        box.hidden = false;
-      }, { once: true });
-    };
-    window.addEventListener('error', function (event) {
-      window.__showBornIntoError('The game script hit an error: ' + (event.message || 'unknown error'));
-    });
-    setTimeout(function () {
-      if (!window.__BORN_INTO_READY__) {
-        window.__showBornIntoError('The game JavaScript did not start. Confirm that main.js exists beside index.html in the repository root.');
-      }
-    }, 2500);
-  </script>
-  <link rel="stylesheet" href="./styles.css?v=7" />
+  <link rel="stylesheet" href="./styles.css?v=8" />
 </head>
 <body>
   <div id="startupError" class="startup-error" hidden></div>
-  <main id="app">
+
+  <main id="app" class="app-shell">
     <header class="topbar">
       <div class="brand-lockup">
         <div class="logo-mark" aria-hidden="true">BI</div>
-        <div>
+        <div class="brand-copy">
           <h1>Born Into</h1>
-          <p>Every life begins somewhere.</p>
+          <p id="calendarLabel">Monday · Week 1</p>
         </div>
       </div>
+      <div class="top-status">
+        <span id="clockLabel">07:00</span>
+        <span id="moneyTop">₱0</span>
+      </div>
       <div class="top-actions">
-        <button type="button" id="pauseBtn" class="icon-btn" title="Pause">Ⅱ</button>
-        <button type="button" id="speedBtn" class="pill-btn" title="Change speed">1×</button>
+        <button type="button" id="pauseBtn" class="icon-btn" aria-label="Pause">Ⅱ</button>
+        <button type="button" id="speedBtn" class="pill-btn" aria-label="Change speed">1×</button>
         <button type="button" id="saveBtn" class="pill-btn">Save</button>
-        <button type="button" id="menuBtn" class="icon-btn" title="Menu">☰</button>
+        <button type="button" id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
       </div>
     </header>
 
     <section class="game-layout">
-      <div class="canvas-wrap">
-        <canvas id="game" width="704" height="576" aria-label="Born Into game world"></canvas>
-        <div id="toastLayer" aria-live="polite"></div>
-        <div id="interactionPrompt" class="interaction-prompt hidden">Press E to interact</div>
-        <div class="tap-hint">Tap a person for details</div>
+      <div class="canvas-column">
+        <div class="canvas-wrap">
+          <canvas id="game" width="704" height="576" aria-label="Born Into game world"></canvas>
+          <div id="toastLayer" class="toast-layer" aria-live="polite"></div>
+          <div class="canvas-help">Tap a person to inspect them</div>
+        </div>
+
+        <section class="intent-bar" aria-label="Autonomy controls">
+          <div class="intent-copy">
+            <span id="modeBadge" class="mode-badge">AUTO</span>
+            <div>
+              <small>Current intention</small>
+              <strong id="goalLabel">Choosing the next activity</strong>
+            </div>
+          </div>
+          <div class="intent-actions">
+            <button type="button" id="stopBtn">Stop</button>
+            <button type="button" id="resumeBtn" hidden>Resume</button>
+            <button type="button" id="destinationBtn">Choose place</button>
+            <button type="button" id="directBtn">Take control</button>
+          </div>
+        </section>
       </div>
 
       <aside id="sidePanel" class="side-panel">
-        <nav class="mobile-tabs" aria-label="Character panels">
-          <button type="button" class="mobile-tab active" data-mobile-tab="me">Me</button>
-          <button type="button" class="mobile-tab" data-mobile-tab="family">Family</button>
-          <button type="button" class="mobile-tab" data-mobile-tab="home">Home</button>
+        <nav class="panel-tabs" aria-label="Information panels">
+          <button type="button" class="active" data-tab="me">Me</button>
+          <button type="button" data-tab="family">Family</button>
+          <button type="button" data-tab="home">Home</button>
+          <button type="button" data-tab="town">Town</button>
         </nav>
 
-        <section id="playerCardBtn" class="identity-card tappable-card" role="button" tabindex="0" aria-label="View your character details" data-panel-section="me">
-          <div id="portrait" class="portrait"></div>
+        <section id="playerCardBtn" class="identity-card tappable-card" role="button" tabindex="0" data-panel-section="me">
+          <div id="portrait" class="portrait" data-stage="baby"><span></span></div>
           <div class="identity-copy">
             <span id="stageBadge" class="stage-badge">Baby</span>
             <h2 id="playerName">New Life</h2>
-            <p id="ageLabel">Age 0</p>
+            <p id="ageLabel">Age 0 months · Gen 1</p>
           </div>
         </section>
 
         <section class="world-card compact-grid" data-panel-section="me">
           <div><span>Day</span><strong id="dayLabel">1</strong></div>
           <div><span>Time</span><strong id="timeLabel">07:00</strong></div>
-          <div><span>Place</span><strong id="placeLabel">Home</strong></div>
+          <div><span>Place</span><strong id="placeLabel">Family Home</strong></div>
           <div><span>Money</span><strong id="moneyLabel">₱0</strong></div>
         </section>
 
@@ -81,19 +86,10 @@
           <div id="needsList" class="bars"></div>
         </section>
 
-        <section class="panel-section" data-panel-section="family">
-          <div class="section-title"><h3>Family</h3><span id="familyMood">Stable</span></div>
-          <div id="familyList" class="family-list"></div>
-        </section>
-
         <section class="panel-section" data-panel-section="me">
-          <div class="section-title"><h3>Current story</h3><span id="objectiveTag">Growing</span></div>
-          <p id="objectiveText" class="objective">Your life has just begun.</p>
-        </section>
-
-        <section class="panel-section" data-panel-section="home">
-          <div class="section-title"><h3>Household</h3><span id="homeTierLabel">Home</span></div>
-          <div id="homeSummary" class="home-summary"></div>
+          <div class="section-title"><h3>Current plan</h3><span id="objectiveTag">Autonomous</span></div>
+          <p id="objectiveText" class="objective">Choosing the next activity</p>
+          <p id="scheduleText" class="schedule-copy">Your schedule will appear here.</p>
         </section>
 
         <section class="panel-section log-section" data-panel-section="me">
@@ -101,42 +97,51 @@
           <div id="eventLog" class="event-log"></div>
         </section>
 
-        <details class="dev-tools">
-          <summary>Test controls</summary>
-          <div class="dev-grid">
-            <button type="button" id="ageBtn">Age +1 year</button>
-            <button type="button" id="eventBtn">Trigger event</button>
-            <button type="button" id="childBtn">Add child</button>
-            <button type="button" id="deathBtn">Force death</button>
-          </div>
-        </details>
+        <section class="panel-section" data-panel-section="family" hidden>
+          <div class="section-title"><h3>Family</h3><span id="familyMood">Steady</span></div>
+          <div id="familyList" class="family-list"></div>
+        </section>
+
+        <section class="panel-section" data-panel-section="family" hidden>
+          <div class="section-title"><h3>Household finances</h3></div>
+          <div id="ledgerList" class="ledger-list"></div>
+        </section>
+
+        <section class="panel-section" data-panel-section="home" hidden>
+          <div class="section-title"><h3>Household</h3><span id="homeTierLabel">Home</span></div>
+          <div id="homeSummary" class="home-summary"></div>
+        </section>
+
+        <section class="panel-section" data-panel-section="town" hidden>
+          <div class="section-title"><h3>Town life</h3><span>Live routines</span></div>
+          <div id="townSummary" class="town-summary"></div>
+        </section>
       </aside>
     </section>
 
-    <section class="controls" aria-label="Game controls">
-      <div class="dpad" aria-label="Touch movement controls">
-        <button type="button" data-dir="up">▲</button>
-        <button type="button" data-dir="left">◀</button>
-        <button type="button" data-dir="down">▼</button>
-        <button type="button" data-dir="right">▶</button>
+    <section id="directControls" class="direct-controls" hidden aria-label="Direct movement controls">
+      <div class="dpad">
+        <button type="button" data-dir="up" aria-label="Move up">▲</button>
+        <button type="button" data-dir="left" aria-label="Move left">◀</button>
+        <button type="button" data-dir="down" aria-label="Move down">▼</button>
+        <button type="button" data-dir="right" aria-label="Move right">▶</button>
       </div>
       <button type="button" id="actionBtn" class="action-button">Interact</button>
-      <button type="button" id="cryBtn" class="cry-button">Cry</button>
-      <div class="desktop-help"><kbd>WASD</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>C</kbd> Cry &nbsp; <kbd>Space</kbd> Pause</div>
     </section>
+    <button type="button" id="cryBtn" class="cry-fab">Cry</button>
   </main>
 
-  <div id="menuOverlay" class="overlay visible">
+  <div id="menuOverlay" class="overlay visible menu-overlay">
     <div class="menu-panel pixel-frame">
       <div class="menu-art" aria-hidden="true">
-        <div class="sun"></div>
-        <div class="house-art"><i></i><i></i><i></i></div>
-        <div class="family-art"><i></i><i></i><i></i></div>
+        <div class="menu-town">
+          <i class="house h1"></i><i class="house h2"></i><i class="tree t1"></i><i class="tree t2"></i><i class="road"></i>
+        </div>
       </div>
       <div class="menu-content">
-        <p class="eyebrow">A GENERATIONAL LIFE SIM</p>
+        <p class="eyebrow">A LIVING GENERATIONAL TOWN</p>
         <h2>Born Into</h2>
-        <p class="menu-intro">You do not choose your beginning. Live, grow, form a family, and continue through the lives of your children.</p>
+        <p class="menu-intro">Watch one family grow through weekdays, weekends, work, school, hobbies, home changes, siblings, and future generations. Ordinary movement can happen automatically—you decide when to intervene.</p>
         <div id="mainMenuButtons" class="menu-buttons">
           <button type="button" id="continueBtn" class="primary-btn">Continue life</button>
           <button type="button" id="newGameBtn" class="secondary-btn">Begin a new life</button>
@@ -144,13 +149,14 @@
         </div>
         <form id="newGameForm" class="new-game-form hidden">
           <label>Character name<input id="nameInput" maxlength="18" placeholder="Random name" /></label>
-          <label>World seed<div class="input-row"><input id="seedInput" maxlength="24" placeholder="Leave blank for random" /><button type="button" id="randomSeedBtn">↻</button></div></label>
+          <label>World seed<div class="input-row"><input id="seedInput" maxlength="30" placeholder="Leave blank for random" /><button type="button" id="randomSeedBtn" aria-label="Randomize seed">↻</button></div></label>
           <div class="form-actions"><button type="button" id="backBtn" class="ghost-btn">Back</button><button type="submit" class="primary-btn">Be born</button></div>
         </form>
         <div id="howPanel" class="how-panel hidden">
-          <p><strong>Baby:</strong> Cry when your needs are low. Your caregivers may respond—or may be too overwhelmed.</p>
-          <p><strong>Toddler onward:</strong> Explore with WASD or the touch controls. Interact with nearby objects using E.</p>
-          <p><strong>Life:</strong> Time changes your stage, relationships, opportunities, and risks. Save data stays in your browser.</p>
+          <p><strong>Autonomy:</strong> Your character follows school, work, meals, hobbies, errands, and sleep automatically.</p>
+          <p><strong>Guide them:</strong> Choose a place and the character will walk there. Stop at any time, or take direct control.</p>
+          <p><strong>Family:</strong> Parents have jobs, weekends, hobbies, money, furniture priorities, relationships, and the possibility of more children.</p>
+          <p><strong>Town:</strong> Residents follow their own schedules. Crowds change by hour, weekday, and location.</p>
           <button type="button" id="howBackBtn" class="ghost-btn">Back</button>
         </div>
       </div>
@@ -166,6 +172,21 @@
     </div>
   </div>
 
-  <script defer src="./main.js?v=7"></script>
+  <div id="profileOverlay" class="overlay hidden sheet-overlay">
+    <section class="sheet profile-sheet" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <header><div><p class="eyebrow">CHARACTER</p><h2 id="profileTitle">Profile</h2></div><button type="button" id="profileCloseBtn" class="close-btn">×</button></header>
+      <div id="profileBody" class="profile-body"></div>
+    </section>
+  </div>
+
+  <div id="destinationOverlay" class="overlay hidden sheet-overlay">
+    <section class="sheet destination-sheet" role="dialog" aria-modal="true">
+      <header><div><p class="eyebrow">GUIDED AUTONOMY</p><h2>Choose a destination</h2></div><button type="button" id="destinationCloseBtn" class="close-btn">×</button></header>
+      <p class="sheet-intro">Your character will walk there and perform the selected activity. You can press Stop at any moment.</p>
+      <div id="destinationChoices" class="destination-choices"></div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/main.js?v=8"></script>
 </body>
 </html>
