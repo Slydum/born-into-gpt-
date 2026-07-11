@@ -1,5 +1,5 @@
 import { clamp, seededPhase } from './utils.js';
-import { drawCharacterSprite } from './characterSprites.js?v=76';
+import { drawCharacterSprite } from './characterSprites.js?v=80';
 
 export const SKIN_TONES = ['#f6d0ac', '#e8b788', '#cf8f5f', '#a86542', '#6f3f2b'];
 export const HAIR_COLORS = ['#241b18', '#3b2923', '#60402c', '#8a5737', '#c28a52', '#9f4b31', '#c8c2b9'];

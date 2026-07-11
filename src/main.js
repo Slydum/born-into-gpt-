@@ -4,7 +4,7 @@ import {
   clearLegacySaves, createNewGame, deleteSave, hasLegacySave, hasSave, loadGame, saveGame
 } from './state.js';
 import { Simulation } from './simulation.js';
-import { Renderer } from './render.js?v=76';
+import { Renderer } from './render.js?v=80';
 import { NotificationManager, UI } from './ui.js';
 
 const canvas = document.getElementById('game');
