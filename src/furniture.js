@@ -6,6 +6,7 @@ const ASSET_ROOT = 'assets/furniture';
  * `fit` controls how the art is drawn inside the logical collision footprint.
  */
 export const FURNITURE_SPRITES = {
+  // Bedroom sprites remain as individual transparent PNG files.
   bed_single_oak: { path: `${ASSET_ROOT}/bed_single_oak.png`, fit: 'contain' },
   bed_single_green: { path: `${ASSET_ROOT}/bed_single_green.png`, fit: 'contain' },
   bed_double_rose: { path: `${ASSET_ROOT}/bed_double_rose.png`, fit: 'contain' },
@@ -16,26 +17,34 @@ export const FURNITURE_SPRITES = {
   dresser_wood: { path: `${ASSET_ROOT}/dresser_wood.png`, fit: 'contain' },
   wardrobe_wood: { path: `${ASSET_ROOT}/wardrobe_wood.png`, fit: 'contain' },
   desk_wood: { path: `${ASSET_ROOT}/desk_wood.png`, fit: 'contain' },
-  rug_blue_small: { path: `${ASSET_ROOT}/rug_blue_small.png`, fit: 'stretch' },
-  rug_round_jute: { path: `${ASSET_ROOT}/rug_round_jute.png`, fit: 'stretch' },
-  lamp_floor_tripod: { path: `${ASSET_ROOT}/lamp_floor_tripod.png`, fit: 'contain' },
-  plant_monstera: { path: `${ASSET_ROOT}/plant_monstera.png`, fit: 'contain' },
-  plant_rubber: { path: `${ASSET_ROOT}/plant_rubber.png`, fit: 'contain' },
-  sofa_cream_3: { path: `${ASSET_ROOT}/sofa_cream_3.png`, fit: 'contain' },
-  sofa_green_3: { path: `${ASSET_ROOT}/sofa_green_3.png`, fit: 'contain' },
-  sofa_blue_3: { path: `${ASSET_ROOT}/sofa_blue_3.png`, fit: 'contain' },
-  sofa_cream_2: { path: `${ASSET_ROOT}/sofa_cream_2.png`, fit: 'contain' },
-  armchair_cream: { path: `${ASSET_ROOT}/armchair_cream.png`, fit: 'contain' },
-  armchair_green: { path: `${ASSET_ROOT}/armchair_green.png`, fit: 'contain' },
-  sectional_cream: { path: `${ASSET_ROOT}/sectional_cream.png`, fit: 'contain' },
   coffee_table_rect: { path: `${ASSET_ROOT}/coffee_table_rect.png`, fit: 'contain' },
   coffee_table_oval: { path: `${ASSET_ROOT}/coffee_table_oval.png`, fit: 'contain' },
-  tv_console_wood: { path: `${ASSET_ROOT}/tv_console_wood.png`, fit: 'contain' },
   bookshelf_low: { path: `${ASSET_ROOT}/bookshelf_low.png`, fit: 'contain' },
-  rug_cream_large: { path: `${ASSET_ROOT}/rug_cream_large.png`, fit: 'stretch' },
-  rug_blue_large: { path: `${ASSET_ROOT}/rug_blue_large.png`, fit: 'stretch' },
-  lamp_arc: { path: `${ASSET_ROOT}/lamp_arc.png`, fit: 'contain' },
-  wall_art_landscape: { path: `${ASSET_ROOT}/wall_art_landscape.png`, fit: 'contain' }
+  sectional_cream: { path: `${ASSET_ROOT}/sectional_cream.png`, fit: 'contain' },
+
+  // The uploaded living-room image is used directly as one sprite sheet.
+  // `source` is [x, y, width, height] inside living-room-sheet.png.
+  sofa_cream_3: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [28, 24, 226, 82], fit: 'contain' },
+  sofa_green_3: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [430, 22, 250, 86], fit: 'contain' },
+  sofa_orange_3: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [710, 22, 254, 86], fit: 'contain' },
+  sofa_blue_3: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [977, 24, 191, 84], fit: 'contain' },
+  sofa_cream_2: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [275, 112, 137, 84], fit: 'contain' },
+  armchair_cream: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [22, 302, 88, 72], fit: 'contain' },
+  armchair_green: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [319, 302, 88, 72], fit: 'contain' },
+  armchair_blue: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [1050, 302, 96, 72], fit: 'contain' },
+  armchair_orange: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [715, 302, 94, 72], fit: 'contain' },
+  tv_console_wood: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [28, 458, 176, 84], fit: 'contain' },
+  rug_cream_large: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [19, 554, 184, 96], fit: 'stretch' },
+  rug_blue_large: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [401, 554, 185, 96], fit: 'stretch' },
+  rug_green_large: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [207, 554, 185, 96], fit: 'stretch' },
+  rug_blue_small: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [401, 554, 185, 96], fit: 'stretch' },
+  rug_round_jute: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [778, 558, 116, 92], fit: 'stretch' },
+  lamp_arc: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [26, 786, 65, 93], fit: 'contain' },
+  lamp_floor_tripod: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [113, 785, 70, 96], fit: 'contain' },
+  plant_monstera: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [1206, 678, 82, 85], fit: 'contain' },
+  plant_rubber: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [1360, 684, 50, 76], fit: 'contain' },
+  plant_box: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [1206, 678, 82, 85], fit: 'contain' },
+  wall_art_landscape: { path: `${ASSET_ROOT}/living-room-sheet.png`, source: [469, 918, 205, 60], fit: 'contain' }
 };
 
 export const BED_FURNITURE_IDS = new Set([
@@ -115,15 +124,15 @@ export function resolveFurnitureSprite(item, state) {
   else if (item.id === 'wardrobe') key = 'wardrobe_wood';
   else if (item.id === 'studyDesk') key = 'desk_wood';
   else if (item.id === 'sofa') {
-    const sofas = style.vibe === 'elegant' ? ['sofa_blue_3', 'sofa_cream_3'] : style.palette === 'green' ? ['sofa_green_3', 'sofa_cream_3'] : ['sofa_cream_3', 'sofa_blue_3'];
+    const sofas = style.vibe === 'elegant' ? ['sofa_blue_3', 'sofa_cream_3'] : style.palette === 'green' ? ['sofa_green_3', 'sofa_cream_3'] : style.palette === 'rose' ? ['sofa_orange_3', 'sofa_cream_3'] : ['sofa_cream_3', 'sofa_blue_3'];
     key = pickStable(sofas, seed);
-  } else if (item.id === 'armchair') key = style.palette === 'green' ? 'armchair_green' : 'armchair_cream';
+  } else if (item.id === 'armchair') key = style.palette === 'green' ? 'armchair_green' : style.palette === 'blue' ? 'armchair_blue' : style.palette === 'rose' ? 'armchair_orange' : 'armchair_cream';
   else if (item.id === 'coffeeTable') key = style.vibe === 'modern' ? 'coffee_table_oval' : 'coffee_table_rect';
   else if (item.id === 'television') key = 'tv_console_wood';
   else if (item.id === 'bookshelf') key = 'bookshelf_low';
-  else if (item.id === 'rug') key = style.palette === 'blue' ? 'rug_blue_large' : style.vibe === 'traditional' ? 'rug_round_jute' : 'rug_cream_large';
+  else if (item.id === 'rug') key = style.palette === 'blue' ? 'rug_blue_large' : style.palette === 'green' ? 'rug_green_large' : style.vibe === 'traditional' ? 'rug_round_jute' : 'rug_cream_large';
   else if (item.id === 'floorLamp') key = style.vibe === 'modern' ? 'lamp_arc' : 'lamp_floor_tripod';
-  else if (item.id === 'plant') key = pickStable(['plant_monstera', 'plant_rubber'], seed);
+  else if (item.id === 'plant') key = pickStable(['plant_monstera', 'plant_rubber', 'plant_box'], seed);
   else if (item.id === 'wallArt') key = 'wall_art_landscape';
 
   if (key) item.spriteKey = key;
@@ -139,11 +148,16 @@ export function ensureFurnitureVisuals(state) {
 
 export function preloadFurnitureSprites() {
   const images = new Map();
+  const imagesByPath = new Map();
   if (typeof Image === 'undefined') return images;
   for (const [key, info] of Object.entries(FURNITURE_SPRITES)) {
-    const image = new Image();
-    image.decoding = 'async';
-    image.src = info.path;
+    let image = imagesByPath.get(info.path);
+    if (!image) {
+      image = new Image();
+      image.decoding = 'async';
+      image.src = info.path;
+      imagesByPath.set(info.path, image);
+    }
     images.set(key, image);
   }
   return images;
@@ -152,19 +166,21 @@ export function preloadFurnitureSprites() {
 export function drawFurnitureSprite(ctx, image, info, rect) {
   if (!image || !image.complete || !image.naturalWidth) return false;
   const { x, y, w, h } = rect;
+  const source = info?.source || [0, 0, image.naturalWidth, image.naturalHeight];
+  const [sx, sy, sw, sh] = source;
   if (info?.fit === 'stretch') {
-    ctx.drawImage(image, x, y, w, h);
+    ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
     return true;
   }
-  const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
-  const dw = image.naturalWidth * scale;
-  const dh = image.naturalHeight * scale;
+  const scale = Math.min(w / sw, h / sh);
+  const dw = sw * scale;
+  const dh = sh * scale;
   const dx = x + (w - dw) / 2;
   const dy = y + h - dh;
-  ctx.drawImage(image, dx, dy, dw, dh);
+  ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
   return true;
 }
 
 export function furnitureMeta(id) {
-  return FURNITURE_META[id] || (BED_IDS.has(id) ? FURNITURE_META.childBed : null);
+  return FURNITURE_META[id] || (BED_FURNITURE_IDS.has(id) ? FURNITURE_META.childBed : null);
 }
