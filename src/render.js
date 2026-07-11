@@ -7,6 +7,7 @@ import {
 import { clamp, formatTime, seededPhase, titleCase } from './utils.js';
 import { drawTopDownCharacter } from './art.js';
 import { assignedSleepPosition, assignedSeatPosition } from './v7.js';
+import { FURNITURE_SPRITES, preloadFurnitureSprites, resolveFurnitureSprite, drawFurnitureSprite } from './furniture.js';
 
 const ROOM_COLORS = {
   parentBedroom: ['#dfcda8', '#e7d7b6'],
@@ -16,7 +17,8 @@ const ROOM_COLORS = {
   childBedroom: ['#c8d7d1', '#d5e2dd'],
   teenBedroom: ['#c4d1dc', '#d1dde5'],
   bathroom: ['#d7e5e4', '#e3efee'],
-  upperLanding: ['#d8d0bc','#e5ddcb'], upperBedroomA:['#c9d8df','#d7e4ea'], upperBedroomB:['#d8cadd','#e5d7e8'], upperHobbyRoom:['#d9d3ad','#e7e0bd'], upperBathroom:['#d7e5e4','#e3efee']
+  upperLanding: ['#d8d0bc','#e5ddcb'], upperBedroomA:['#c9d8df','#d7e4ea'], upperBedroomB:['#d8cadd','#e5d7e8'], upperHobbyRoom:['#d9d3ad','#e7e0bd'], upperBathroom:['#d7e5e4','#e3efee'],
+  adultBedroom:['#d7d2c3','#e5dfd0'], roommateBedroom:['#ccd7d0','#d9e3dd'], guestBedroom:['#ddd3c5','#e8dfd2']
 };
 
 const SCENE_PALETTES = {
@@ -39,6 +41,7 @@ export class Renderer {
     this.simulation = simulation;
     this.animationClock = 0;
     this.personHitboxes = [];
+    this.furnitureSprites = preloadFurnitureSprites();
   }
 
   setState(state) {
@@ -139,6 +142,16 @@ export class Renderer {
     const y = item.y;
     const w = item.w;
     const h = item.h;
+    const spriteKey = resolveFurnitureSprite(item, this.state);
+    const spriteInfo = spriteKey ? FURNITURE_SPRITES[spriteKey] : null;
+    const spriteImage = spriteKey ? this.furnitureSprites.get(spriteKey) : null;
+    if (spriteKey && spriteImage?.complete && spriteImage.naturalWidth) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      const drawn = drawFurnitureSprite(ctx, spriteImage, spriteInfo, {x,y,w,h});
+      ctx.restore();
+      if (drawn) return;
+    }
     switch (item.id) {
       case 'parentBed':
       case 'toddlerBed':
@@ -148,6 +161,10 @@ export class Renderer {
       case 'upperBedA':
       case 'upperBedB':
       case 'nannyBed':
+      case 'bunkBed':
+      case 'apartmentBed':
+      case 'roommateBed':
+      case 'guestBed':
         ctx.fillStyle = '#65483e';
         ctx.fillRect(x, y, w, h);
         ctx.fillStyle = item.id === 'parentBed' ? '#8eb1bf' : '#d99b69';
@@ -506,8 +523,10 @@ export class Renderer {
 
   drawPeople(scene) {
     const currentFloor=this.state.household.home.currentFloor || 0;
+    const activeResidence = this.state.activeResidenceId || 'familyHome';
     const family = [this.state.player, ...this.state.parents, ...this.state.siblings, this.state.nanny]
-      .filter(person => person && !person.movedOut && person.location === scene && !person.carriedBy && person.alive !== false && (scene !== 'home' || (person.floor ?? 0) === currentFloor));
+      .filter(person => person && person.location === scene && !person.carriedBy && person.alive !== false)
+      .filter(person => scene !== 'home' || ((person.currentResidenceId || person.officialResidenceId || 'familyHome') === activeResidence && (person.floor ?? 0) === currentFloor));
     for (const person of family) {
       const isPlayer = person.id === this.state.player.id;
       this.drawPerson(person, isPlayer, true);
@@ -515,7 +534,7 @@ export class Renderer {
     for (const resident of getVisibleResidents(this.state, scene)) this.drawPerson(resident, false, false);
     if (this.state.player.carriedBy) {
       const carrier = [this.state.nanny, ...this.state.parents].find(item => item?.id === this.state.player.carriedBy);
-      if (carrier && carrier.location === scene) this.drawCarriedBaby(carrier);
+      if (carrier && carrier.location === scene && (scene !== 'home' || (carrier.currentResidenceId || carrier.officialResidenceId || 'familyHome') === (this.state.activeResidenceId || 'familyHome'))) this.drawCarriedBaby(carrier);
     }
   }
 
@@ -587,7 +606,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(19,26,39,.72)';
       ctx.fillRect(16, 14, 240, 24);
       ctx.fillStyle = '#f7f2e7';
-      ctx.fillText(`${this.state.household.label.toUpperCase()} · ${(this.state.household.home.currentFloor||0)===0?'GROUND FLOOR':'SECOND FLOOR'} · ${formatTime(this.state.time.minute)}`, 25, 30);
+      ctx.fillText(`${(this.state.activeResidenceId==='familyHome'?this.state.household.label:(this.state.player.residence||this.state.household.label)).toUpperCase()} · ${(this.state.household.home.currentFloor||0)===0?'GROUND FLOOR':'SECOND FLOOR'} · ${formatTime(this.state.time.minute)}`, 25, 30);
     }
   }
 

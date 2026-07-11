@@ -1,6 +1,162 @@
 import { TILE, JOBS, HOUSE_PURCHASES } from './config.js';
 import { clamp, stageForAge, titleCase } from './utils.js';
 import { createAppearance } from './art.js';
+import { BED_FURNITURE_IDS, ensureFurnitureVisuals, resolveFurnitureSprite } from './furniture.js';
+
+
+
+export function ensureResidenceSystem(state) {
+  state.households ||= {};
+  if (!state.households.familyHome) {
+    state.household.id ||= 'familyHome';
+    state.household.residenceId = 'familyHome';
+    state.households.familyHome = state.household;
+  }
+  state.activeResidenceId ||= state.household?.residenceId || 'familyHome';
+  if (!state.households[state.activeResidenceId]) state.activeResidenceId = 'familyHome';
+  state.household = state.households[state.activeResidenceId];
+  state.household.residenceId ||= state.activeResidenceId;
+  state.household.id ||= state.activeResidenceId;
+
+  const familyMembers = [state.player, ...(state.parents || []), ...(state.siblings || []), state.nanny].filter(Boolean);
+  for (const person of familyMembers) {
+    person.officialResidenceId ||= person.movedOut ? (person.residenceId || 'away') : 'familyHome';
+    person.currentResidenceId ||= person.location === 'home' ? person.officialResidenceId : null;
+    if (person.alive === false) {
+      person.currentResidenceId = null;
+      person.location = 'deceased';
+    }
+  }
+  return state.household;
+}
+
+export function isPersonAtActiveResidence(state, person) {
+  if (!person || person.alive === false || person.location !== 'home') return false;
+  const current = person.currentResidenceId || person.officialResidenceId || 'familyHome';
+  return current === (state.activeResidenceId || 'familyHome');
+}
+
+function createStarterApartmentHome(path = 'work') {
+  const rooms = [
+    { id:'adultBedroom', label:'Your bedroom', x:1, y:1, w:7, h:7, active:true, floor:0, door:{x:8.05,y:4.5,edge:'right'} },
+    { id:'livingRoom', label:'Living room', x:9, y:1, w:7, h:7, active:true, floor:0, door:{x:12.5,y:7.95,edge:'bottom'} },
+    { id:'kitchen', label:'Kitchen', x:17, y:1, w:4, h:7, active:true, floor:0, door:{x:17.05,y:4.5,edge:'left'} },
+    { id:'roommateBedroom', label:path === 'college' ? 'Roommate space' : 'Spare bedroom', x:1, y:9, w:7, h:8, active:path !== 'trade', floor:0, door:{x:8.05,y:13,edge:'right'} },
+    { id:'diningRoom', label:'Dining area', x:9, y:9, w:7, h:8, active:true, floor:0, door:{x:12.5,y:9.05,edge:'top'} },
+    { id:'bathroom', label:'Bathroom', x:17, y:9, w:4, h:8, active:true, floor:0, door:{x:17.05,y:13,edge:'left'} }
+  ];
+  const make = (id, room, essential = false, placement = null) => ({
+    id, instanceId:`${id}-${room}-${Math.random().toString(36).slice(2)}`, room, floor:0,
+    ownerId:null, essential, condition:100, delivered:true, placement
+  });
+  return {
+    id:`adult-home-${path}`, layoutId:`adult-${path}`, label:path === 'college' ? 'Student apartment' : path === 'trade' ? 'Boarding room' : 'Shared apartment',
+    condition:82, cleanliness:72, currentFloor:0, entrance:{x:11.5,y:16.5}, floors:[{id:0,label:'Ground Floor',active:true}], stairs:{active:false},
+    rooms,
+    furniture:[
+      make('apartmentBed','adultBedroom',true,{rx:.08,ry:.08,rw:.36,rh:.50}),
+      make('wardrobe','adultBedroom',true,{rx:.68,ry:.08,rw:.24,rh:.25}),
+      make('studyDesk','adultBedroom',true,{rx:.53,ry:.58,rw:.40,rh:.27}),
+      make('sofa','livingRoom',true,{rx:.08,ry:.56,rw:.58,rh:.27}),
+      make('coffeeTable','livingRoom',false,{rx:.26,ry:.34,rw:.36,rh:.20}),
+      make('television','livingRoom',false,{rx:.15,ry:.08,rw:.50,rh:.22}),
+      make('rug','livingRoom',false,{rx:.13,ry:.28,rw:.62,rh:.35}),
+      make('basicTable','diningRoom',true),
+      make('fridge','kitchen',true), make('stove','kitchen',true), make('counter','kitchen',true),
+      make('toilet','bathroom',true), make('sink','bathroom',true), make('shower','bathroom',true), make('laundryBasket','bathroom',false)
+    ],
+    wishlist:[], deliveries:[], purchaseHistory:[], storage:[], roomAssignments:{}, bedAssignments:{}, seatAssignments:{},
+    kitchen:{ingredients:{rice:3,vegetables:2,protein:1,bread:3,fruit:2},preparedMeal:null,leftovers:0,leftoverMeals:[],lastCookedDay:-1},
+    chores:{dirtyDishes:0,laundryLoads:1,trash:0,floorMess:8,bathroomMess:8,lastLaundryDay:-1,laundryStage:'dirty',foldedLoads:0},
+    meal:{phase:'idle',type:null,recipe:null,ingredientUse:{},cookId:null,startedStamp:-1,readyStamp:-1,attendees:[],seats:{},conversations:0,servedUntilStamp:-1,clearedStamp:-1},
+    hobbies:{equipment:[],artworks:[],crafts:[],lastSaleDay:-1}, speech:[], constructionHistory:[], pendingRequests:[], hobbyOwnership:{}
+  };
+}
+
+function createAdultHousehold(state, person, path, residenceLabel) {
+  const familyHousehold = state.households.familyHome;
+  const support = Math.max(450, Math.min(1800, Math.round((familyHousehold.money || 0) * 0.18 + 350)));
+  familyHousehold.money = Math.max(0, (familyHousehold.money || 0) - Math.min(support, 900));
+  const id = `adultHome-${person.id}`;
+  const household = {
+    id, residenceId:id, tier:2, label:residenceLabel, money:support, food:6, reports:0,
+    home:createStarterApartmentHome(path),
+    finances:{weekIncome:0,weekExpenses:0,lifetimeIncome:0,lifetimeExpenses:0,lastRentWeek:-1,lastUtilitiesWeek:-1,nextBillsDay:6,lastNannyPayDay:-1,lastCareSupportDay:-1,careSupportPerDay:0,ledger:[]}
+  };
+  household.home.id = id;
+  state.households[id] = household;
+  return household;
+}
+
+export function switchActiveResidence(state, residenceId) {
+  ensureResidenceSystem(state);
+  const next = state.households[residenceId];
+  if (!next) return false;
+  state.activeResidenceId = residenceId;
+  state.household = next;
+  state.household.home.currentFloor = 0;
+  state.scene = 'home';
+  state.player.location = 'home';
+  state.player.currentResidenceId = residenceId;
+  state.player.floor = 0;
+  const room = next.home.rooms.find(item => item.active && (item.id === (residenceId === 'familyHome' ? state.player.assignedRoomId : 'adultBedroom'))) || next.home.rooms.find(item => item.active);
+  state.player.x = ((room?.x || 10) + (room?.w || 4) * .5) * TILE;
+  state.player.y = ((room?.y || 8) + (room?.h || 4) * .55) * TILE;
+  ensureFurnitureVisuals(state);
+  assignHomeSpaces(state);
+  return true;
+}
+
+export function markPersonDeceased(state, person, day, cause = 'Unknown cause') {
+  if (!person || person.alive === false) return false;
+  person.alive = false;
+  person.status = 'deceased';
+  person.causeOfDeath = cause;
+  person.deathDay = day;
+  person.formerJob = person.job || person.career?.job || null;
+  person.job = null;
+  if (person.career) person.career.job = null;
+  person.careerStatus = 'ended';
+  person.shift = null;
+  person.route = null;
+  person.currentGoal = null;
+  person.guidedGoal = null;
+  person.activity = { type:'deceased', remaining:0, startedStamp:0 };
+  person.location = 'deceased';
+  person.currentResidenceId = null;
+  person.carriedBy = null;
+  person.phone ||= {};
+  person.phone.archived = true;
+  person.phone.unread = 0;
+  if (person.romance?.partnerId) {
+    const partner = v7PersonById(state, person.romance.partnerId);
+    if (partner && partner.alive !== false) {
+      partner.romance ||= {};
+      partner.romance.formerPartnerId = person.id;
+      partner.romance.partnerId = null;
+      partner.romance.status = 'widowed';
+      partner.romance.exclusive = false;
+    }
+    person.romance.formerPartnerId = person.romance.partnerId;
+    person.romance.partnerId = null;
+    person.romance.status = 'deceased';
+    person.romance.exclusive = false;
+  }
+  for (const household of Object.values(state.households || {})) {
+    const home = household?.home;
+    if (!home) continue;
+    delete home.roomAssignments?.[person.id];
+    delete home.bedAssignments?.[person.id];
+    delete home.seatAssignments?.[person.id];
+  }
+  if (state.family?.childcare?.caregiverId === person.id) {
+    state.family.childcare = { type:'unstable', label:'Childcare needs reassignment', caregiverId:null, reliable:false, reason:'The previous caregiver is no longer available.' };
+  }
+  const treeNode = state.familyTree?.find(item => item.id === person.id);
+  if (treeNode) { treeNode.alive = false; treeNode.deathDay = day; treeNode.causeOfDeath = cause; }
+  if (state.household?.home) assignHomeSpaces(state);
+  return true;
+}
 
 const MOODS = ['Content','Happy','Hopeful','Excited','Bored','Lonely','Stressed','Anxious','Sad','Angry','Grieving','Exhausted'];
 const QUICK_MESSAGES = {
@@ -31,6 +187,10 @@ function ensurePerson(person) {
   person.phone ||= { hasPhone: person.stage === 'adult' || person.stage === 'elder', contacts: [], unread: 0 };
   person.hobbyPractice ||= {};
   person.residence ||= person.movedOut ? 'Away from family home' : 'Family home';
+  person.officialResidenceId ||= person.movedOut ? (person.residenceId || 'away') : 'familyHome';
+  person.currentResidenceId ??= person.location === 'home' ? person.officialResidenceId : null;
+  person.sexAtBirth ||= person.appearance?.presentation === 'feminine' ? 'female' : 'male';
+  person.status ||= person.alive === false ? 'deceased' : 'alive';
   person.assignedRoomId ||= null;
   person.assignedBedId ||= null;
   person.assignedSeat ||= null;
@@ -53,8 +213,15 @@ function makeUpperRooms() {
 }
 
 function addFurnitureInstance(home, id, room, options = {}) {
-  const exists = home.furniture.find(item => item.id === id && item.room === room && (options.ownerId ? item.ownerId === options.ownerId : true));
-  if (exists) return exists;
+  let exists = home.furniture.find(item => item.id === id && item.room === room && (options.ownerId ? item.ownerId === options.ownerId : options.shared ? !item.ownerId : true));
+  if (exists) {
+    if (options.ownerId !== undefined) exists.ownerId = options.ownerId;
+    if (options.placement) exists.placement = { ...options.placement };
+    if (options.spriteKey) exists.spriteKey = options.spriteKey;
+    exists.floor = options.floor ?? exists.floor ?? roomById(home, room)?.floor ?? 0;
+    exists.delivered = true;
+    return exists;
+  }
   const item = {
     id,
     instanceId: `${id}-${room}-${options.ownerId || 'shared'}-${home.furniture.length + 1}`,
@@ -63,10 +230,61 @@ function addFurnitureInstance(home, id, room, options = {}) {
     ownerId: options.ownerId || null,
     essential: Boolean(options.essential),
     condition: 100,
-    delivered: true
+    delivered: true,
+    placement: options.placement ? { ...options.placement } : undefined,
+    spriteKey: options.spriteKey || null
   };
   home.furniture.push(item);
   return item;
+}
+
+function moveFurnitureToStorage(home, item, reason = 'Stored') {
+  home.storage ||= [];
+  if (!item) return;
+  home.storage.push({ ...item, storedReason:reason, storedDay:home.lastEvaluationDay ?? 0, delivered:false });
+  home.furniture = home.furniture.filter(entry => entry.instanceId !== item.instanceId);
+}
+
+function removeOwnerFurniture(home, ownerId, options = {}) {
+  const portableIds = new Set(['studyDesk','easel','keyboard','gameConsole','sewingKit','exerciseMat','dumbbells','gardenKit']);
+  const removed = [];
+  for (const item of [...home.furniture]) {
+    if (item.ownerId !== ownerId) continue;
+    if (options.portableOnly && !portableIds.has(item.id)) continue;
+    removed.push(item);
+    moveFurnitureToStorage(home, item, options.reason || 'Owner moved out');
+  }
+  return removed;
+}
+
+function reconcileFurnitureLifecycle(state) {
+  const home = state.household.home;
+  home.storage ||= [];
+  const residents = [state.player, ...(state.parents || []), ...(state.siblings || []), state.nanny]
+    .filter(person => person && person.alive !== false && person.officialResidenceId === state.activeResidenceId);
+  const stages = new Set(residents.map(person => person.stage));
+  const obsolete = [];
+  if (!stages.has('baby')) obsolete.push('crib');
+  if (!stages.has('toddler')) obsolete.push('toddlerBed');
+  if (![...stages].some(stage => ['child','toddler'].includes(stage))) obsolete.push('childBed','siblingBed','bunkBed');
+  if (!stages.has('teen')) obsolete.push('teenBed');
+  for (const item of [...home.furniture]) {
+    if (!obsolete.includes(item.id)) continue;
+    if (item.ownerId && residents.some(person => person.id === item.ownerId)) continue;
+    moveFurnitureToStorage(home, item, 'Outgrown or no longer needed');
+  }
+
+  // A bed is a capacity object, not permanent decoration. Keep only beds that
+  // are currently assigned to a resident; old cribs, duplicate child beds and
+  // construction leftovers are moved to storage instead of piling up.
+  const assignedInstances = new Set(Object.values(home.bedAssignments || {}).map(entry => entry?.instanceId).filter(Boolean));
+  const bedLikeIds = new Set([...BED_FURNITURE_IDS, 'crib']);
+  for (const item of [...home.furniture]) {
+    if (!bedLikeIds.has(item.id)) continue;
+    if (assignedInstances.has(item.instanceId)) continue;
+    moveFurnitureToStorage(home, item, 'Replaced during bedroom reorganization');
+  }
+  ensureFurnitureVisuals(state);
 }
 
 function suitableBedroom(home, person, occupied = new Set()) {
@@ -87,56 +305,129 @@ function suitableBedroom(home, person, occupied = new Set()) {
 }
 
 export function assignHomeSpaces(state) {
+  ensureResidenceSystem(state);
   const home = state.household.home;
   home.roomAssignments ||= {};
   home.bedAssignments ||= {};
   home.seatAssignments ||= {};
-  const occupiedPrivateRooms = new Set();
-  const household = [state.player, ...state.parents, ...(state.siblings || []), state.nanny]
-    .filter(person => person && person.alive !== false && !person.movedOut);
+  home.roomAssignments = {};
+  home.bedAssignments = {};
+  home.seatAssignments = {};
 
-  for (const person of household) ensurePerson(person);
-  state.parents.forEach((parent, index) => {
-    const sleepingApart = Boolean(parent.romance?.sleepingApart);
-    parent.assignedRoomId = sleepingApart ? 'livingRoom' : 'parentBedroom';
-    parent.assignedBedId = sleepingApart ? 'sofa' : 'parentBed';
-    parent.bedSlot = sleepingApart ? 'center' : (index === 0 ? 'left' : 'right');
-    if (sleepingApart) addFurnitureInstance(home, 'sofa', 'livingRoom', { ownerId:parent.id, essential:true, floor:0 });
-    home.roomAssignments[parent.id] = parent.assignedRoomId;
-    home.bedAssignments[parent.id] = { furnitureId:parent.assignedBedId, roomId:parent.assignedRoomId, slot:parent.bedSlot, floor:0 };
+  const activeId = state.activeResidenceId || 'familyHome';
+  const all = [state.player, ...(state.parents || []), ...(state.siblings || []), state.nanny].filter(Boolean);
+  const household = all.filter(person => {
+    if (person.alive === false) return false;
+    if (activeId === 'familyHome') return person.officialResidenceId === 'familyHome' && !person.movedOut;
+    return person.officialResidenceId === activeId;
   });
 
-  const young = [state.player, ...(state.siblings || [])].filter(person => person && !person.movedOut);
-  young.sort((a,b) => b.age - a.age);
-  let childBedIndex = 0;
-  for (const person of young) {
-    let room = suitableBedroom(home, person, occupiedPrivateRooms);
-    if (person.stage === 'baby') room = roomById(home, 'parentBedroom') || room;
-    if ((person.stage === 'teen' || person.stage === 'adult') && ['teenBedroom','upperBedroomA','upperBedroomB'].includes(room?.id)) occupiedPrivateRooms.add(room.id);
-    person.assignedRoomId = room?.id || 'childBedroom';
-    let bedId;
-    let slot = 'center';
-    if (person.stage === 'baby') bedId = 'crib';
-    else if (person.stage === 'toddler' && home.furniture.some(item => item.id === 'toddlerBed')) bedId = 'toddlerBed';
-    else if (person.assignedRoomId === 'teenBedroom' || person.assignedRoomId.startsWith('upperBedroom')) {
-      bedId = person.assignedRoomId === 'teenBedroom' ? 'teenBed' : `upperBed${person.assignedRoomId.endsWith('A') ? 'A' : 'B'}`;
-      addFurnitureInstance(home, bedId, person.assignedRoomId, { ownerId:person.id, essential:true, floor:room?.floor || 0 });
-    } else {
-      bedId = childBedIndex++ % 2 === 0 ? 'childBed' : 'siblingBed';
-      addFurnitureInstance(home, bedId, person.assignedRoomId, { ownerId:person.id, essential:true, floor:room?.floor || 0 });
+  for (const person of all) ensurePerson(person);
+
+  if (activeId !== 'familyHome') {
+    const player = state.player;
+    if (player.alive !== false && player.officialResidenceId === activeId) {
+      const room = roomById(home, 'adultBedroom') || home.rooms.find(item => item.active);
+      const bed = addFurnitureInstance(home, 'apartmentBed', room.id, {
+        ownerId:player.id, essential:true, floor:room.floor || 0,
+        placement:{rx:.08,ry:.08,rw:.36,rh:.50}
+      });
+      player.assignedRoomId = room.id;
+      player.assignedBedId = bed.id;
+      player.bedSlot = 'center';
+      home.roomAssignments[player.id] = room.id;
+      home.bedAssignments[player.id] = { instanceId:bed.instanceId, furnitureId:bed.id, roomId:room.id, slot:'center', floor:room.floor || 0 };
+      player.assignedSeat = 'leftTop';
+      home.seatAssignments[player.id] = 'leftTop';
     }
-    person.assignedBedId = bedId;
-    home.roomAssignments[person.id] = person.assignedRoomId;
-    home.bedAssignments[person.id] = { furnitureId:bedId, roomId:person.assignedRoomId, slot, floor:room?.floor || 0 };
+    reconcileFurnitureLifecycle(state);
+    return;
   }
 
-  if (state.nanny && state.nanny.liveIn) {
-    const room = suitableBedroom(home, state.nanny, occupiedPrivateRooms);
-    state.nanny.assignedRoomId = room?.id || 'livingRoom';
-    state.nanny.assignedBedId = room?.id === 'livingRoom' ? 'sofa' : 'nannyBed';
-    if (state.nanny.assignedBedId === 'nannyBed') addFurnitureInstance(home,'nannyBed',state.nanny.assignedRoomId,{ownerId:state.nanny.id,essential:true,floor:room?.floor || 0});
-    home.roomAssignments[state.nanny.id] = state.nanny.assignedRoomId;
-    home.bedAssignments[state.nanny.id] = { furnitureId:state.nanny.assignedBedId, roomId:state.nanny.assignedRoomId, slot:'center', floor:room?.floor || 0 };
+  const activeParents = (state.parents || []).filter(parent => parent.alive !== false && parent.officialResidenceId === 'familyHome');
+  activeParents.forEach((parent, index) => {
+    const sleepingApart = Boolean(parent.romance?.sleepingApart);
+    const roomId = sleepingApart ? 'livingRoom' : 'parentBedroom';
+    const bedId = sleepingApart ? 'sofa' : 'parentBed';
+    let furniture;
+    if (sleepingApart) {
+      furniture = addFurnitureInstance(home, 'sofa', 'livingRoom', { shared:true, essential:true, floor:0, placement:{rx:.08,ry:.57,rw:.58,rh:.27} });
+    } else {
+      furniture = addFurnitureInstance(home, 'parentBed', 'parentBedroom', { shared:true, essential:true, floor:0, placement:{rx:.08,ry:.08,rw:.54,rh:.48} });
+    }
+    parent.assignedRoomId = roomId;
+    parent.assignedBedId = bedId;
+    parent.bedSlot = sleepingApart ? 'center' : (index === 0 ? 'left' : 'right');
+    home.roomAssignments[parent.id] = roomId;
+    home.bedAssignments[parent.id] = { instanceId:furniture.instanceId, furnitureId:bedId, roomId, slot:parent.bedSlot, floor:0 };
+  });
+
+  const children = [state.player, ...(state.siblings || [])]
+    .filter(person => person && person.alive !== false && !person.movedOut && person.officialResidenceId === 'familyHome')
+    .sort((a,b) => b.age - a.age);
+
+  const babies = children.filter(person => person.stage === 'baby');
+  const privateCandidates = children.filter(person => ['teen','adult'].includes(person.stage));
+  const sharedChildren = children.filter(person => !['baby','teen','adult'].includes(person.stage));
+  const privateRooms = ['teenBedroom','upperBedroomA','upperBedroomB']
+    .map(id => roomById(home,id)).filter(room => room?.active);
+
+  babies.forEach((person, index) => {
+    const room = roomById(home, 'parentBedroom') || roomById(home, 'childBedroom');
+    const crib = addFurnitureInstance(home, 'crib', room.id, { shared:index > 0, ownerId:index === 0 ? person.id : null, essential:true, floor:room.floor || 0, placement:{rx:.68,ry:.10 + index*.38,rw:.25,rh:.34} });
+    person.assignedRoomId = room.id;
+    person.assignedBedId = 'crib';
+    person.bedSlot = 'center';
+    home.roomAssignments[person.id] = room.id;
+    home.bedAssignments[person.id] = { instanceId:crib.instanceId, furnitureId:'crib', roomId:room.id, slot:'center', floor:room.floor || 0 };
+  });
+
+  privateCandidates.forEach((person,index) => {
+    const room = privateRooms[index] || roomById(home,'childBedroom') || roomById(home,'parentBedroom');
+    const bedId = room.id === 'teenBedroom' ? 'teenBed' : room.id === 'upperBedroomA' ? 'upperBedA' : room.id === 'upperBedroomB' ? 'upperBedB' : 'childBed';
+    const bed = addFurnitureInstance(home, bedId, room.id, { ownerId:person.id, essential:true, floor:room.floor || 0, placement:{rx:.08,ry:.08,rw:.36,rh:.50} });
+    person.assignedRoomId = room.id;
+    person.assignedBedId = bedId;
+    person.bedSlot = 'center';
+    home.roomAssignments[person.id] = room.id;
+    home.bedAssignments[person.id] = { instanceId:bed.instanceId, furnitureId:bedId, roomId:room.id, slot:'center', floor:room.floor || 0 };
+  });
+
+  if (sharedChildren.length) {
+    const room = roomById(home,'childBedroom') || roomById(home,'parentBedroom');
+    if (sharedChildren.length >= 2) {
+      const bunk = addFurnitureInstance(home,'bunkBed',room.id,{shared:true,essential:true,floor:room.floor || 0,placement:{rx:.08,ry:.08,rw:.42,rh:.54}});
+      sharedChildren.slice(0,2).forEach((person,index) => {
+        person.assignedRoomId = room.id;
+        person.assignedBedId = 'bunkBed';
+        person.bedSlot = index === 0 ? 'top' : 'bottom';
+        home.roomAssignments[person.id] = room.id;
+        home.bedAssignments[person.id] = {instanceId:bunk.instanceId,furnitureId:'bunkBed',roomId:room.id,slot:person.bedSlot,floor:room.floor || 0};
+      });
+      sharedChildren.slice(2).forEach((person,index) => {
+        const bed = addFurnitureInstance(home,index % 2 ? 'siblingBed':'childBed',room.id,{ownerId:person.id,essential:true,floor:room.floor || 0,placement:{rx:.55,ry:.08 + index*.40,rw:.36,rh:.46}});
+        person.assignedRoomId=room.id; person.assignedBedId=bed.id; person.bedSlot='center';
+        home.roomAssignments[person.id]=room.id;
+        home.bedAssignments[person.id]={instanceId:bed.instanceId,furnitureId:bed.id,roomId:room.id,slot:'center',floor:room.floor || 0};
+      });
+    } else {
+      const person = sharedChildren[0];
+      const id = person.stage === 'toddler' ? 'toddlerBed' : 'childBed';
+      const bed = addFurnitureInstance(home,id,room.id,{ownerId:person.id,essential:true,floor:room.floor || 0,placement:{rx:.08,ry:.08,rw:.36,rh:.50}});
+      person.assignedRoomId=room.id; person.assignedBedId=id; person.bedSlot='center';
+      home.roomAssignments[person.id]=room.id;
+      home.bedAssignments[person.id]={instanceId:bed.instanceId,furnitureId:id,roomId:room.id,slot:'center',floor:room.floor || 0};
+    }
+  }
+
+  if (state.nanny && state.nanny.alive !== false && state.nanny.liveIn && state.nanny.officialResidenceId === 'familyHome') {
+    const occupied = new Set(Object.values(home.roomAssignments));
+    const room = privateRooms.find(item => !occupied.has(item.id)) || roomById(home,'childBedroom') || roomById(home,'livingRoom');
+    const bedId = room.id === 'livingRoom' ? 'sofa' : 'nannyBed';
+    const bed = addFurnitureInstance(home,bedId,room.id,{ownerId:state.nanny.id,essential:true,floor:room.floor || 0,placement:room.id === 'livingRoom'?{rx:.08,ry:.57,rw:.58,rh:.27}:{rx:.08,ry:.08,rw:.36,rh:.50}});
+    state.nanny.assignedRoomId=room.id; state.nanny.assignedBedId=bedId; state.nanny.bedSlot='center';
+    home.roomAssignments[state.nanny.id]=room.id;
+    home.bedAssignments[state.nanny.id]={instanceId:bed.instanceId,furnitureId:bedId,roomId:room.id,slot:'center',floor:room.floor || 0};
   }
 
   const seats = ['leftTop','rightTop','leftBottom','rightBottom','top','bottom'];
@@ -144,6 +435,7 @@ export function assignHomeSpaces(state) {
     person.assignedSeat = seats[index % seats.length];
     home.seatAssignments[person.id] = person.assignedSeat;
   });
+  reconcileFurnitureLifecycle(state);
 }
 
 function ensureHomeV7(state) {
@@ -160,9 +452,18 @@ function ensureHomeV7(state) {
     item.instanceId ||= `${item.id}-${item.room}-${home.furniture.indexOf(item)}`;
     item.ownerId ??= null;
   }
+  home.storage ||= [];
+  home.roomAssignments ||= {};
+  home.bedAssignments ||= {};
+  home.seatAssignments ||= {};
   home.constructionHistory ||= [];
   home.pendingRequests ||= [];
   home.hobbyOwnership ||= {};
+  home.meal ||= {phase:'idle',type:null,recipe:null,ingredientUse:{},cookId:null,startedStamp:-1,readyStamp:-1,attendees:[],seats:{},conversations:0};
+  home.kitchen ||= {ingredients:{rice:3,vegetables:2,protein:1,bread:2,fruit:2},preparedMeal:null,leftovers:0,leftoverMeals:[]};
+  home.chores ||= {dirtyDishes:0,laundryLoads:0,trash:0,floorMess:0,bathroomMess:0};
+  home.hobbies ||= {equipment:[],artworks:[],crafts:[],lastSaleDay:-1};
+  home.speech ||= [];
   home.meal.servedUntilStamp ??= -1;
   home.meal.clearedStamp ??= -1;
   home.kitchen.leftovers ??= 0;
@@ -213,6 +514,7 @@ function ensureLifeEvents(state) {
 
 export function initializeV7State(state, rng) {
   state.extendedFamily ||= [];
+  ensureResidenceSystem(state);
   ensureHomeV7(state);
   ensureLifeEvents(state);
   for (const person of v7PersonList(state,true)) ensurePerson(person);
@@ -230,21 +532,25 @@ export function initializeV7State(state, rng) {
     }
   }
   ensureSocial(state,rng);
+  ensureFurnitureVisuals(state);
   assignHomeSpaces(state);
   return state;
 }
 
-function getFurnitureRectLike(state, furnitureId, roomId = null) {
+function getFurnitureRectLike(state, itemOrId, roomId = null) {
   const home = state.household.home;
-  const room = roomById(home, roomId || home.furniture.find(item => item.id === furnitureId)?.room);
+  const item = typeof itemOrId === 'object' ? itemOrId : home.furniture.find(entry => entry.id === itemOrId && (!roomId || entry.room === roomId));
+  const furnitureId = typeof itemOrId === 'object' ? itemOrId.id : itemOrId;
+  const room = roomById(home, roomId || item?.room || home.furniture.find(entry => entry.id === furnitureId)?.room);
   if (!room) return null;
   const specs = {
-    parentBed:{rx:.08,ry:.16,rw:.48,rh:.22}, crib:{rx:.68,ry:.16,rw:.20,rh:.22}, toddlerBed:{rx:.56,ry:.60,rw:.34,rh:.18},
-    childBed:{rx:.08,ry:.16,rw:.42,rh:.18}, siblingBed:{rx:.08,ry:.58,rw:.42,rh:.18}, teenBed:{rx:.08,ry:.16,rw:.46,rh:.20},
-    upperBedA:{rx:.08,ry:.16,rw:.46,rh:.20}, upperBedB:{rx:.08,ry:.16,rw:.46,rh:.20}, nannyBed:{rx:.08,ry:.16,rw:.46,rh:.20},
-    sofa:{rx:.08,ry:.64,rw:.46,rh:.18}, basicTable:{rx:.23,ry:.28,rw:.55,rh:.30}, diningSet:{rx:.18,ry:.24,rw:.64,rh:.34}
+    parentBed:{rx:.08,ry:.08,rw:.54,rh:.48}, crib:{rx:.68,ry:.10,rw:.25,rh:.34}, toddlerBed:{rx:.08,ry:.08,rw:.36,rh:.50},
+    childBed:{rx:.08,ry:.08,rw:.36,rh:.50}, siblingBed:{rx:.55,ry:.08,rw:.36,rh:.50}, bunkBed:{rx:.08,ry:.08,rw:.42,rh:.54},
+    teenBed:{rx:.08,ry:.08,rw:.36,rh:.50}, upperBedA:{rx:.08,ry:.08,rw:.36,rh:.50}, upperBedB:{rx:.08,ry:.08,rw:.36,rh:.50},
+    nannyBed:{rx:.08,ry:.08,rw:.36,rh:.50}, apartmentBed:{rx:.08,ry:.08,rw:.36,rh:.50}, roommateBed:{rx:.08,ry:.08,rw:.36,rh:.50},
+    sofa:{rx:.08,ry:.57,rw:.58,rh:.27}, basicTable:{rx:.23,ry:.28,rw:.55,rh:.30}, diningSet:{rx:.18,ry:.24,rw:.64,rh:.34}
   };
-  const spec = specs[furnitureId] || {rx:.35,ry:.35,rw:.25,rh:.20};
+  const spec = item?.placement || specs[furnitureId] || {rx:.35,ry:.35,rw:.25,rh:.20};
   return {
     x:(room.x + .18 + spec.rx*Math.max(1,room.w-.36))*TILE,
     y:(room.y + .18 + spec.ry*Math.max(1,room.h-.36))*TILE,
@@ -256,12 +562,16 @@ function getFurnitureRectLike(state, furnitureId, roomId = null) {
 export function assignedSleepPosition(state, person) {
   const assignment = state.household.home.bedAssignments?.[person.id];
   if (!assignment) return null;
-  const rect = getFurnitureRectLike(state,assignment.furnitureId,assignment.roomId);
+  const item = state.household.home.furniture.find(entry => entry.instanceId === assignment.instanceId)
+    || state.household.home.furniture.find(entry => entry.id === assignment.furnitureId && entry.room === assignment.roomId && (!entry.ownerId || entry.ownerId === person.id));
+  const rect = getFurnitureRectLike(state,item || assignment.furnitureId,assignment.roomId);
   if (!rect) return null;
   let x = rect.x + rect.w/2;
   let y = rect.y + rect.h/2;
-  if (assignment.slot === 'left') x = rect.x + rect.w*.34;
-  if (assignment.slot === 'right') x = rect.x + rect.w*.66;
+  if (assignment.slot === 'left') x = rect.x + rect.w*.38;
+  if (assignment.slot === 'right') x = rect.x + rect.w*.62;
+  if (assignment.slot === 'top') { x = rect.x + rect.w*.48; y = rect.y + rect.h*.30; }
+  if (assignment.slot === 'bottom') { x = rect.x + rect.w*.48; y = rect.y + rect.h*.70; }
   return { x, y, floor:assignment.floor ?? roomById(state.household.home,assignment.roomId)?.floor ?? 0, roomId:assignment.roomId };
 }
 
@@ -269,7 +579,7 @@ export function assignedSeatPosition(state, person) {
   const home = state.household.home;
   const table = home.furniture.find(item => ['diningSet','basicTable'].includes(item.id));
   if (!table) return null;
-  const rect = getFurnitureRectLike(state,table.id,table.room);
+  const rect = getFurnitureRectLike(state,table,table.room);
   if (!rect) return null;
   const slot = home.seatAssignments?.[person.id] || 'leftTop';
   const map = {
@@ -549,16 +859,44 @@ export class V7LifeSystem {
     if (!this.state.phone.unlocked) return {ok:false,text:'You do not have a personal phone yet.'};
     const target=v7PersonById(this.state,contactId);
     if (!target) return {ok:false,text:'That contact is unavailable.'};
+    if (target.alive === false || target.phone?.archived) return {ok:false,text:`${target.name.split(' ')[0]}'s conversation is archived.`};
     const thread=this.state.social.threads[contactId] ||= [];
-    const sent=this.rng.pick(QUICK_MESSAGES[kind]||QUICK_MESSAGES.hello);
-    thread.push({from:this.state.player.id,text:sent,stamp:this.stamp});
-    const busy=['working','school','sleeping'].includes(target.activity?.type);
+    const sameResidence = (target.currentResidenceId || target.officialResidenceId) === (this.state.player.currentResidenceId || this.state.player.officialResidenceId);
+    const bothHome = sameResidence && target.location === 'home' && this.state.player.location === 'home';
+    const sameScene = target.location === this.state.player.location && target.location !== 'away';
+    const familyTarget = ['Parent','Sibling'].includes(target.role);
+
+    let sent;
+    if (bothHome && familyTarget) {
+      const localByKind = {
+        hello:['Are you free to talk?', 'Where are you in the house?', 'How is your day going?'],
+        hobby:['Want to practice our hobby later?', 'Can I show you what I have been working on?', 'Want to do something together after dinner?'],
+        support:['I am here if you need anything.', 'You seem stressed. Are you okay?', 'Can I help with something?'],
+        invite:['Want to go out together later?', 'Can we visit the park after chores?', 'Should we do something as a family?'],
+        family:['Are we eating together tonight?', 'Do you need help with anything at home?', 'Can we have some family time later?']
+      };
+      sent=this.rng.pick(localByKind[kind]||localByKind.hello);
+    } else if (sameScene) {
+      sent=this.rng.pick(['I can see you nearby, but I wanted to send this.', 'Talk to me when you are free.', 'Are you busy right now?']);
+    } else {
+      sent=this.rng.pick(QUICK_MESSAGES[kind]||QUICK_MESSAGES.hello);
+      if (kind === 'family' && !target.movedOut && target.officialResidenceId === this.state.player.officialResidenceId) {
+        sent=this.rng.pick(['How is your day going?', 'Are you coming home soon?', 'Can we talk later?']);
+      }
+    }
+    thread.push({from:this.state.player.id,text:sent,stamp:this.stamp,context:bothHome?'same-home':'remote'});
+    const busy=['working','school','sleeping','commuting'].includes(target.activity?.type) || target.location === 'workplace' || target.location === 'school';
     const replyDelay=busy?90:this.rng.int(5,35);
-    const reply=kind==='family' ? 'I miss everyone too. I will call soon.' : kind==='support' ? 'Thank you. That means a lot.' : kind==='invite' ? 'That sounds good. Let me check my schedule.' : 'Hey! It is nice to hear from you.';
+    let reply;
+    if (bothHome && familyTarget) reply = kind==='support' ? 'Thank you. Come talk to me when you can.' : kind==='family' ? 'Yes, let us talk after I finish this.' : 'Sure. I am nearby.';
+    else if (kind==='family') reply = target.movedOut || target.officialResidenceId !== this.state.player.officialResidenceId ? 'I miss you too. I will call soon.' : 'I will be home later.';
+    else if (kind==='support') reply='Thank you. That means a lot.';
+    else if (kind==='invite') reply='That sounds good. Let me check my schedule.';
+    else reply='Hey! It is nice to hear from you.';
     thread.push({from:target.id,text:reply,stamp:this.stamp+replyDelay,pending:replyDelay>20});
     const rel=this.socialize(this.state.player,target,'phone');
     if (rel) { rel.affection=clamp(rel.affection-2); rel.trust=clamp(rel.trust-1); }
-    return {ok:true,text:busy?`${target.name.split(' ')[0]} is busy and may reply later.`:`Message sent to ${target.name.split(' ')[0]}.`};
+    return {ok:true,text:busy?`${target.name.split(' ')[0]} is busy and may reply later.`:bothHome?'Message sent. They are in the same home.':`Message sent to ${target.name.split(' ')[0]}.`};
   }
 
   invite(contactId) {
@@ -628,29 +966,74 @@ export class V7LifeSystem {
   }
 
   chooseAdultPath(person,path) {
-    const choices={college:{label:'College student',residence:'University dormitory'},work:{label:'Full-time worker',residence:'Shared apartment'},trade:{label:'Trade apprentice',residence:'Boarding house'}};
+    ensureResidenceSystem(this.state);
+    const choices={
+      college:{label:'College student',residence:'Student apartment near campus'},
+      work:{label:'Full-time worker',residence:'Shared starter apartment'},
+      trade:{label:'Trade apprentice',residence:'Boarding room near training'}
+    };
     const chosen=choices[path]||choices.work;
     const transition=this.state.adulthood.transitions[person.id] ||= {};
     Object.assign(transition,{status:'moved out',path,residence:chosen.residence,day:this.day});
-    person.adultPath=path; person.residence=chosen.residence; person.movedOut=true;
+    person.adultPath=path;
+    person.movedOut=true;
     person.memories.unshift({day:this.day,label:`Moved into a ${chosen.residence.toLowerCase()}`,moodImpact:10});
+
     if (person.id===this.state.player.id) {
+      const familyHome = this.state.households.familyHome.home;
+      const portable = removeOwnerFurniture(familyHome, person.id, {portableOnly:true, reason:'Packed for adult move-out'});
+      const adultHousehold = createAdultHousehold(this.state, person, path, chosen.residence);
+      const adultHome = adultHousehold.home;
+      const bedroom = roomById(adultHome,'adultBedroom');
+      for (const item of portable) {
+        if (['childBed','teenBed','upperBedA','upperBedB','toddlerBed','crib','bunkBed'].includes(item.id)) continue;
+        item.instanceId = `${item.id}-moved-${person.id}-${adultHome.furniture.length}`;
+        item.room = ['easel','keyboard','gameConsole','sewingKit','exerciseMat','dumbbells','gardenKit','studyDesk'].includes(item.id) ? 'adultBedroom' : item.room;
+        item.floor=0; item.delivered=true; item.ownerId=person.id;
+        item.placement ||= item.id==='studyDesk'?{rx:.53,ry:.58,rw:.40,rh:.27}:undefined;
+        adultHome.furniture.push(item);
+      }
+      person.officialResidenceId=adultHousehold.residenceId;
+      person.residenceId=adultHousehold.residenceId;
+      person.residence=chosen.residence;
+      person.currentResidenceId=adultHousehold.residenceId;
+      person.location='home';
       this.state.adulthood.playerChoice=path;
       person.career ||= {job:null,payBonus:0,completedShiftKeys:[]};
       if (path==='work') person.career.job={...JOBS.find(job=>['office','retail','driver'].includes(job.id))};
       this.state.family.history.unshift(`${person.name} moved out to begin life as a ${chosen.label.toLowerCase()}.`);
-      this.sim.notify(`You moved into a ${chosen.residence.toLowerCase()}.`, 'important','player-move-out');
+      switchActiveResidence(this.state, adultHousehold.residenceId);
+      this.state.scene='home';
+      this.sim.notify(`You moved into your ${chosen.residence.toLowerCase()}. Your old family home remains visitable.`, 'important','player-move-out');
+      this.sim.showEvent({
+        eyebrow:'NEW HOME', title:`Welcome to your ${chosen.residence}`,
+        body:'Your belongings were transferred, your bed is assigned, and this is now your official residence. Use Choose place to visit the family home.',
+        choices:[{label:'Start adult life'}]
+      });
     } else {
+      const id=`adultHome-${person.id}`;
+      person.officialResidenceId=id;
+      person.residenceId=id;
+      person.currentResidenceId=null;
+      person.residence=chosen.residence;
+      person.location='away';
       const idx=(this.state.siblings||[]).findIndex(item=>item.id===person.id);
       if (idx>=0) {
         this.state.siblings.splice(idx,1);
         if (!this.state.extendedFamily.some(item=>item.id===person.id)) this.state.extendedFamily.push(person);
       }
-      person.location='away';
+      const familyHome=this.state.households.familyHome.home;
+      removeOwnerFurniture(familyHome,person.id,{reason:'Sibling moved out'});
       this.state.family.history.unshift(`${person.name} moved into a ${chosen.residence.toLowerCase()} for ${path}.`);
       this.sim.notify(`${person.name.split(' ')[0]} moved out for ${path}.`,'important',`moveout-${person.id}`);
     }
     assignHomeSpaces(this.state);
+  }
+
+  switchResidence(residenceId) {
+    const ok=switchActiveResidence(this.state,residenceId);
+    if (ok) this.sim.notify(residenceId==='familyHome'?'You arrived at the family home.':'You returned to your own home.','routine',`residence-${residenceId}`);
+    return ok;
   }
 
   progressAdultSiblings() {
@@ -658,6 +1041,7 @@ export class V7LifeSystem {
       if (sibling.stage==='adult' && !sibling.movedOut) this.beginAdultTransition(sibling);
     }
     for (const sibling of this.state.extendedFamily||[]) {
+      if (sibling.alive === false) continue;
       sibling.age += 1/730;
       if (sibling.adultPath==='college' && sibling.age>=22 && !sibling.job) sibling.job={...JOBS.find(job=>job.id==='office')};
       if (!sibling.phone.contacts.includes(this.state.player.id)) sibling.phone.contacts.push(this.state.player.id);
@@ -722,8 +1106,7 @@ export class V7LifeSystem {
   triggerUnexpectedDeath(person) {
     if (this.state.settings.unexpectedDeath==='rare' && !this.rng.chance(.18)) return this.triggerMinorIllness(person);
     if (person.id===this.state.player.id && person.age<18) return this.triggerAccident(person);
-    person.alive=false; person.causeOfDeath='Unexpected medical or accidental event'; person.location='away';
-    person.moodState={label:'Grieving',reasons:[],sinceDay:this.day};
+    markPersonDeceased(this.state,person,this.day,'Unexpected medical or accidental event');
     for (const relative of v7PersonList(this.state,true).filter(other=>other.id!==person.id&&other.alive!==false)) {
       relative.moodState={label:'Grieving',reasons:[`Death of ${person.name}`],sinceDay:this.day};
       relative.memories.unshift({day:this.day,label:`Grieved the death of ${person.name}`,moodImpact:-30});
@@ -732,8 +1115,8 @@ export class V7LifeSystem {
   }
 
   triggerPregnancyEvent() {
-    const teens=v7PersonList(this.state,true).filter(person=>person.alive!==false && person.stage==='teen' && person.age>=15 && person.romance?.partnerId);
-    const adultCouples=v7PersonList(this.state,true).filter(person=>person.stage==='adult'&&person.romance?.partnerId);
+    const teens=v7PersonList(this.state,true).filter(person=>person.alive!==false && person.stage==='teen' && person.age>=15 && person.age<18 && person.sexAtBirth==='female' && person.romance?.partnerId && !person.pregnancy);
+    const adultCouples=v7PersonList(this.state,true).filter(person=>person.alive!==false && person.stage==='adult' && person.age>=18 && person.age<=45 && person.sexAtBirth==='female' && person.romance?.partnerId && !person.pregnancy);
     const person=this.rng.pick(teens.length?teens:adultCouples);
     if (!person) return;
     const isTeen=person.stage==='teen';

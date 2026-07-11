@@ -10,6 +10,9 @@ export function getLocation(state, type) {
 
 export function locationLabel(state, type) {
   if (type === 'town') return state.town.name;
+  if (type === 'familyHome') return 'Family Home';
+  if (type === 'myHome') return state.player?.residence || 'My Home';
+  if (type === 'home') return state.activeResidenceId === 'familyHome' ? 'Family Home' : (state.player?.residence || state.household?.label || 'My Home');
   return getLocation(state, type)?.name || LOCATION_LABELS[type] || type;
 }
 
@@ -29,11 +32,17 @@ export function getSceneEntryPoint(scene) {
 }
 
 export function getAllFamily(state) {
-  return [state.player, ...state.parents, ...state.siblings, state.nanny].filter(Boolean);
+  const active = state.activeResidenceId || 'familyHome';
+  return [state.player, ...state.parents, ...state.siblings, state.nanny]
+    .filter(person => person && person.alive !== false)
+    .filter(person => (person.currentResidenceId || person.officialResidenceId || 'familyHome') === active);
 }
 
 export function getCaregivers(state) {
-  return [...state.parents, state.nanny].filter(person => person && person.alive !== false);
+  const active = state.activeResidenceId || 'familyHome';
+  return [...state.parents, state.nanny]
+    .filter(person => person && person.alive !== false)
+    .filter(person => (person.currentResidenceId || person.officialResidenceId || 'familyHome') === active);
 }
 
 export function getYoungestChild(state) {
@@ -75,13 +84,13 @@ export function getSceneObjects(state, scene = state.scene) {
   if (scene === 'home') {
     const items = getFurnitureRects(state).map(item => {
       const labels = {
-        parentBed: 'Rest in bed', crib: 'Check the crib', toddlerBed: 'Rest in your toddler bed', childBed: 'Rest in your bed', siblingBed: 'Sibling bed', teenBed:'Rest in your bed', upperBedA:'Rest in your bed', upperBedB:'Rest in your bed', nannyBed:'Rest in bed',
+        parentBed: 'Rest in bed', crib: 'Check the crib', toddlerBed: 'Rest in your toddler bed', childBed: 'Rest in your bed', siblingBed: 'Sibling bed', bunkBed:'Use the bunk bed', teenBed:'Rest in your bed', upperBedA:'Rest in your bed', upperBedB:'Rest in your bed', nannyBed:'Rest in bed', apartmentBed:'Rest in your bed', roommateBed:'Roommate bed', guestBed:'Guest bed',
         fridge: 'Check ingredients', stove: 'Cook a meal', basicTable: 'Sit at the table', diningSet: 'Sit at the dining table',
-        sofa: 'Relax on the sofa', television: 'Watch television', bookshelf: 'Read a book', studyDesk: 'Study at your desk', plant: 'Water the plant', rug: 'Sit on the rug', toilet: 'Use the bathroom', sink: 'Wash up', shower: 'Take a shower', laundryBasket: 'Sort laundry', washingMachine: 'Wash laundry', dishRack: 'Wash dishes', dishwasher: 'Run the dishwasher', exerciseMat: 'Exercise', dumbbells: 'Lift weights', easel: 'Paint', keyboard: 'Practice music', sewingKit: 'Sew', gardenKit: 'Garden', gameConsole: 'Play games'
+        sofa: 'Relax on the sofa', armchair:'Sit in the armchair', coffeeTable:'Use the coffee table', television: 'Watch television', bookshelf: 'Read a book', studyDesk: 'Study at your desk', wardrobe:'Open wardrobe', floorLamp:'Turn on lamp', wallArt:'Look at artwork', plant: 'Water the plant', rug: 'Sit on the rug', toilet: 'Use the bathroom', sink: 'Wash up', shower: 'Take a shower', laundryBasket: 'Sort laundry', washingMachine: 'Wash laundry', dishRack: 'Wash dishes', dishwasher: 'Run the dishwasher', exerciseMat: 'Exercise', dumbbells: 'Lift weights', easel: 'Paint', keyboard: 'Practice music', sewingKit: 'Sew', gardenKit: 'Garden', gameConsole: 'Play games'
       };
       const types = {
-        parentBed: 'bed', crib: 'crib', toddlerBed: 'bed', childBed: 'bed', siblingBed: 'bed', teenBed:'bed', upperBedA:'bed', upperBedB:'bed', nannyBed:'bed', fridge: 'fridge', stove: 'stove',
-        basicTable: 'table', diningSet: 'table', sofa: 'sofa', television: 'television', bookshelf: 'book', studyDesk: 'study', plant: 'plant', rug: 'rug', toilet: 'bathroom', sink: 'bathroom', shower: 'bathroom', laundryBasket: 'laundry', washingMachine: 'laundry', dishRack: 'dishes', dishwasher: 'dishes', exerciseMat: 'exercise', dumbbells: 'exercise', easel: 'painting', keyboard: 'music', sewingKit: 'sewing', gardenKit: 'gardening', gameConsole: 'gaming'
+        parentBed: 'bed', crib: 'crib', toddlerBed: 'bed', childBed: 'bed', siblingBed: 'bed', bunkBed:'bed', teenBed:'bed', upperBedA:'bed', upperBedB:'bed', nannyBed:'bed', apartmentBed:'bed', roommateBed:'bed', guestBed:'bed', fridge: 'fridge', stove: 'stove',
+        basicTable: 'table', diningSet: 'table', sofa: 'sofa', armchair:'sofa', coffeeTable:'furniture', television: 'television', bookshelf: 'book', studyDesk: 'study', plant: 'plant', rug: 'rug', toilet: 'bathroom', sink: 'bathroom', shower: 'bathroom', laundryBasket: 'laundry', washingMachine: 'laundry', dishRack: 'dishes', dishwasher: 'dishes', exerciseMat: 'exercise', dumbbells: 'exercise', easel: 'painting', keyboard: 'music', sewingKit: 'sewing', gardenKit: 'gardening', gameConsole: 'gaming'
       };
       return { id: item.id, type: types[item.id] || 'furniture', label: labels[item.id] || item.id, x: item.x + item.w / 2, y: item.y + item.h / 2, w: item.w, h: item.h, solid: !['rug', 'plant'].includes(item.id) };
     });
@@ -306,6 +315,7 @@ export function residentScheduleLocation(resident, state) {
 export function getVisibleResidents(state, scene = state.scene) {
   const hour = state.time.minute / 60;
   return state.town.residents
+    .filter(resident => resident.alive !== false)
     .map(resident => ({ ...resident, computedLocation: residentScheduleLocation(resident, state) }))
     .filter(resident => {
       if (scene === 'town') {

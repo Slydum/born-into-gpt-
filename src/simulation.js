@@ -15,9 +15,9 @@ import {
   getActivityPoint, getIndoorWaypoints, getSceneEntryPoint, getSceneExitPoint, getTownDoorPoint, locationLabel, nearestObject, residentScheduleLocation
 } from './world.js';
 import { evolveAppearance } from './art.js';
-import { V7LifeSystem, assignHomeSpaces, preferredHobbyRoom } from './v7.js';
+import { V7LifeSystem, assignHomeSpaces, preferredHobbyRoom, isPersonAtActiveResidence } from './v7.js';
 
-const PLAYER_YEAR_DAYS = 2;
+const PLAYER_YEAR_DAYS = 4;
 const GAME_MINUTES_PER_REAL_SECOND = 5;
 const CARE_LOCK_MINUTES = 45;
 const ROUTE_EPSILON = 8;
@@ -162,18 +162,21 @@ export class Simulation {
     const years = gameMinutes / (1440 * PLAYER_YEAR_DAYS);
     const familyYoung = [this.state.player, ...this.state.siblings];
     for (const person of familyYoung) {
+      if (person.alive === false) continue;
       const oldStage = person.stage;
       person.age += years;
       person.stage = stageForAge(person.age);
       if (oldStage !== person.stage) { person.appearance = evolveAppearance(this.rng, person, person.stage); this.handleStageChange(person, oldStage); }
     }
     for (const parent of this.state.parents) {
+      if (parent.alive === false) continue;
       const oldStage = parent.stage;
       parent.age += years;
       parent.stage = stageForAge(parent.age);
       if (oldStage !== parent.stage) parent.appearance = evolveAppearance(this.rng, parent, parent.stage);
     }
     for (const resident of this.state.town.residents) {
+      if (resident.alive === false) continue;
       resident.age += years * 0.2;
       resident.stage = stageForAge(resident.age);
     }
@@ -242,9 +245,13 @@ export class Simulation {
 
   updateFamilyAgents(realDt, gameMinutes) {
     this.releaseExpiredCareLock();
-    for (const parent of this.state.parents) this.updateParent(parent, realDt, gameMinutes);
-    if (this.state.nanny) this.updateNanny(this.state.nanny, realDt, gameMinutes);
-    for (const sibling of this.state.siblings) this.updateSibling(sibling, realDt, gameMinutes);
+    for (const parent of this.state.parents) {
+      if (isPersonAtActiveResidence(this.state, parent)) this.updateParent(parent, realDt, gameMinutes);
+    }
+    if (this.state.nanny && isPersonAtActiveResidence(this.state, this.state.nanny)) this.updateNanny(this.state.nanny, realDt, gameMinutes);
+    for (const sibling of this.state.siblings) {
+      if (isPersonAtActiveResidence(this.state, sibling)) this.updateSibling(sibling, realDt, gameMinutes);
+    }
   }
 
   updateParent(parent, realDt, gameMinutes) {
@@ -319,7 +326,7 @@ export class Simulation {
     if (!person || person.alive === false || this.isWorkingOrUnavailable(person)) return false;
     const hour = this.state.time.minute / 60;
     if (person.role === 'Nanny' && !person.liveIn && (!isWeekday(this.state.time.totalDays) || hour < 6.5 || hour >= 19)) return false;
-    return person.location === 'home';
+    return person.location === 'home' && (person.currentResidenceId || person.officialResidenceId || 'familyHome') === (this.state.activeResidenceId || 'familyHome');
   }
 
   getActiveCaregiver() {
@@ -338,7 +345,7 @@ export class Simulation {
 
   selectHouseholdAdult(filter = () => true) {
     return [this.state.nanny, ...this.state.parents]
-      .filter(person => person && person.location === 'home' && !this.isWorkingOrUnavailable(person) && filter(person))
+      .filter(person => person && person.location === 'home' && (person.currentResidenceId || person.officialResidenceId || 'familyHome') === (this.state.activeResidenceId || 'familyHome') && !this.isWorkingOrUnavailable(person) && filter(person))
       .sort((a,b) => (b.traits?.responsibility||50) - (a.traits?.responsibility||50))[0] || null;
   }
 
@@ -395,7 +402,7 @@ export class Simulation {
     const meal = home.meal;
     if (meal.phase === 'planned' && meal.cookId === person.id) return goal('cooking','home',45,108,{ mealType:meal.type, recipe:meal.recipe });
     if (['ready','eating'].includes(meal.phase) && !['baby'].includes(person.stage)) {
-      const eligible = [this.state.player,...this.state.parents,...this.state.siblings,this.state.nanny].filter(Boolean).filter(member => member.location === 'home' && member.alive !== false && member.stage !== 'baby');
+      const eligible = [this.state.player,...this.state.parents,...this.state.siblings,this.state.nanny].filter(Boolean).filter(member => member.location === 'home' && member.alive !== false && member.stage !== 'baby' && (member.currentResidenceId || member.officialResidenceId || 'familyHome') === (this.state.activeResidenceId || 'familyHome'));
       meal.attendees = eligible.map(member => member.id);
       meal.eatenIds ||= [];
       if (meal.attendees.includes(person.id) && !meal.eatenIds.includes(person.id)) return goal('familyMeal','home',35,102,{ mealType:meal.type });
@@ -405,7 +412,7 @@ export class Simulation {
     const ageOK = ['teen','adult','elder'].includes(person.stage) || person.role === 'Nanny' || person.role === 'Parent';
     if (!ageOK) return null;
     const availableAdults = [this.state.nanny, ...this.state.parents]
-      .filter(candidate => candidate && candidate.location === 'home' && !this.isWorkingOrUnavailable(candidate));
+      .filter(candidate => candidate && candidate.location === 'home' && (candidate.currentResidenceId || candidate.officialResidenceId || 'familyHome') === (this.state.activeResidenceId || 'familyHome') && !this.isWorkingOrUnavailable(candidate));
     const owner = type => {
       const ranked = [...availableAdults].sort((a, b) => {
         const aScore = (a.traits?.responsibility || 50) + (a.careerStatus === 'stayHome' ? 18 : 0)
@@ -1387,19 +1394,29 @@ export class Simulation {
   evaluateFamilyPlanning() {
     const state = this.state;
     const day = Math.floor(state.time.totalDays);
-    if (state.parents.length < 2 || state.family.pregnancy || day < state.family.planningCooldownUntil) return;
+    const livingParents = state.parents.filter(parent => parent.alive !== false);
+    if (livingParents.length < 2 || state.family.pregnancy || day < state.family.planningCooldownUntil) return;
     if (state.family.lastPlanningCheck === day || day % 7 !== 5) return;
     state.family.lastPlanningCheck = day;
-    const livingChildren = 1 + state.siblings.length;
+    // Ordinary pregnancy is only possible when one living parent is a female
+    // adult within the configured biological age range. Older-parent families
+    // can still exist through the pre-birth timeline, adoption or guardianship,
+    // but the simulator must not create a biological birth at age 72.
+    const pregnantParent = livingParents.find(parent => parent.sexAtBirth === 'female' && parent.age >= 18 && parent.age <= 45);
+    if (!pregnantParent) {
+      state.family.planningCooldownUntil = day + 14;
+      return;
+    }
+    const livingChildren = 1 + state.siblings.filter(child => child.alive !== false).length;
     if (livingChildren >= state.family.desiredChildren) return;
     const relationship = state.family.relationship || { affection: 40, trust: 40, tension: 40 };
-    const averageStress = state.parents.reduce((sum, parent) => sum + parent.needs.stress, 0) / state.parents.length;
-    const averageFocus = state.parents.reduce((sum, parent) => sum + parent.traits.familyFocus, 0) / state.parents.length;
+    const averageStress = livingParents.reduce((sum, parent) => sum + parent.needs.stress, 0) / livingParents.length;
+    const averageFocus = livingParents.reduce((sum, parent) => sum + parent.traits.familyFocus, 0) / livingParents.length;
     const spacePenalty = livingChildren >= 2 && !roomExists(state, 'childBedroom') ? 18 : 0;
     const moneyScore = clamp(state.household.money / 30, 0, 45);
     const score = relationship.affection * 0.35 + relationship.trust * 0.18 + averageFocus * 0.32 + moneyScore - averageStress * 0.32 - relationship.tension * 0.22 - spacePenalty;
     if (score > 54 && this.rng.chance(clamp(score / 120, 0.18, 0.72))) {
-      state.family.pregnancy = { startedDay: day, dueDay: day + this.rng.int(6, 8), parentIds: state.parents.map(parent => parent.id) };
+      state.family.pregnancy = { startedDay: day, dueDay: day + this.rng.int(6, 8), parentIds: livingParents.map(parent => parent.id), pregnantParentId: pregnantParent.id };
       state.family.planningCooldownUntil = day + 18;
       this.notify('Your parents decided to grow the family. A new baby is expected.', 'important', `pregnancy-${day}`);
       this.showEvent({ eyebrow: 'FAMILY', title: 'The family may grow', body: 'After discussing money, space, and their relationship, your parents decided to have another child.', choices: [{ label: 'Continue' }] });
@@ -1412,6 +1429,13 @@ export class Simulation {
     const pregnancy = this.state.family.pregnancy;
     if (!pregnancy) return;
     const day = Math.floor(this.state.time.totalDays);
+    const pregnantParent = pregnancy.pregnantParentId ? getPersonById(this.state, pregnancy.pregnantParentId) : null;
+    if (pregnantParent && pregnantParent.alive === false) {
+      this.state.family.pregnancy = null;
+      this.state.family.planningCooldownUntil = day + 20;
+      this.notify('The expected pregnancy could not continue after the family loss.', 'important', `pregnancy-ended-${day}`);
+      return;
+    }
     if (day < pregnancy.dueDay) return;
     const sibling = createSibling(this.state, this.rng);
     this.state.family.pregnancy = null;
@@ -1514,6 +1538,17 @@ export class Simulation {
 
   guidePlayer(destination, type = null) {
     const player = this.state.player;
+    if (destination === 'familyHome') {
+      this.v7.switchResidence('familyHome');
+      this.onSceneChanged();
+      return;
+    }
+    if (destination === 'myHome') {
+      const own = player.officialResidenceId || 'familyHome';
+      this.v7.switchResidence(own);
+      this.onSceneChanged();
+      return;
+    }
     if (player.stage === 'baby') {
       this.notify('A baby needs a caregiver to travel.', 'routine', 'baby-travel');
       return;
@@ -1705,8 +1740,12 @@ export class Simulation {
 
   getAvailableDestinations() {
     const stage = this.state.player.stage;
+    const homeDestination = this.state.player.movedOut
+      ? { id: 'myHome', label: 'Return to my home', activity: 'relaxing' }
+      : { id: 'home', label: 'Go home', activity: 'relaxing' };
     const common = [
-      { id: 'home', label: 'Go home', activity: 'relaxing' },
+      homeDestination,
+      ...(this.state.player.movedOut ? [{ id: 'familyHome', label: 'Visit family home', activity: 'visiting' }] : []),
       { id: 'park', label: 'Visit the park', activity: 'park' },
       { id: 'community', label: 'Community center', activity: 'community' },
       { id: 'hospital', label: 'Hospital', activity: 'hospital' }

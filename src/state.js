@@ -55,8 +55,11 @@ export function createParent(rng, index, familyName, parentCount) {
     id: `parent-${rng.int(100000, 999999)}-${index}`,
     name: `${rng.pick(NAMES.adult)} ${familyName}`,
     role: 'Parent',
-    age: rng.int(27, 58),
+    age: rng.int(24, 46),
     stage: 'adult',
+    sexAtBirth: null,
+    officialResidenceId: 'familyHome',
+    currentResidenceId: 'familyHome',
     traits,
     revealedTraits: Object.keys(traits),
     hobbies: selectHobbies(rng, traits, rng.int(2, 3)),
@@ -97,6 +100,9 @@ function createPlayer(rng, playerName, familyName) {
     role: 'Player',
     age: 0,
     stage: 'baby',
+    sexAtBirth: null,
+    officialResidenceId: 'familyHome',
+    currentResidenceId: 'familyHome',
     generation: 1,
     traits: [],
     traitSeeds: createTraits(rng),
@@ -209,6 +215,7 @@ const HOME_LAYOUTS = [
 
 export function buildHome(rng, wealth, existingChildren = 0) {
   const template = deepClone(rng.pick(HOME_LAYOUTS));
+  template.layoutId = template.id;
   template.rooms.forEach(roomItem => { roomItem.floor = 0; });
   const hasSofa = wealth.tier >= 2;
   const hasRug = wealth.tier >= 3;
@@ -218,18 +225,19 @@ export function buildHome(rng, wealth, existingChildren = 0) {
   const childRoom = template.rooms.find(item => item.id === 'childBedroom');
   if (childRoom) childRoom.active = existingChildren > 0 || wealth.tier >= 3;
   const items = [
-    furniture('parentBed','parentBedroom',true), furniture('crib','parentBedroom',true), furniture('dresser','parentBedroom',true),
+    furniture('parentBed','parentBedroom',true), furniture('crib','parentBedroom',true), furniture('dresser','parentBedroom',true), furniture('wardrobe','parentBedroom',true),
     furniture('fridge','kitchen',true,rng.int(65,98)), furniture('stove','kitchen',true,rng.int(62,98)), furniture('counter','kitchen',true),
     furniture('basicTable','diningRoom',true), furniture('toilet','bathroom',true), furniture('sink','bathroom',true), furniture('shower','bathroom',true),
     furniture('laundryBasket','bathroom',true), furniture('dishRack','kitchen',true)
   ];
   if (existingChildren > 0) items.push(furniture('childBed','childBedroom',true));
   if (existingChildren > 1) items.push(furniture('siblingBed','childBedroom',true));
-  if (hasSofa) items.push(furniture('sofa','livingRoom'));
+  if (hasSofa) { items.push(furniture('sofa','livingRoom')); items.push(furniture('coffeeTable','livingRoom')); }
   if (hasRug) items.push(furniture('rug','livingRoom'));
   if (hasBookshelf) items.push(furniture('bookshelf','livingRoom'));
-  if (hasPlant) items.push(furniture('plant','livingRoom'));
-  if (hasTelevision) items.push(furniture('television','livingRoom'));
+  if (hasPlant) { items.push(furniture('plant','livingRoom')); items.push(furniture('wallArt','livingRoom')); }
+  if (hasTelevision) { items.push(furniture('television','livingRoom')); items.push(furniture('armchair','livingRoom')); }
+  if (wealth.tier >= 3) items.push(furniture('floorLamp','livingRoom'));
   if (wealth.tier >= 4) items.push(furniture('washingMachine','bathroom'));
   return {
     layoutId: template.id, layoutLabel: template.label, entrance: template.entrance, expansionPlan: template.expansion, currentFloor: 0, floors: [{id:0,label:'Ground Floor',active:true},{id:1,label:'Second Floor',active:false}],
@@ -348,7 +356,7 @@ function createExistingSibling(rng, familyName, index, familyHint, age = null) {
   return {
     id: `sibling-${rng.int(100000, 999999)}-${index}`,
     name: `${rng.pick(NAMES.first)} ${familyName}`,
-    role: 'Sibling', age: resolvedAge, stage, traits: [], traitSeeds,
+    role: 'Sibling', age: resolvedAge, stage, sexAtBirth:null, traits: [], traitSeeds,
     hobbies: selectHobbies(rng, traitSeeds, 2),
     skills: { social: 0, cooking: 0, exercise: 0, painting: 0, music: 0, gardening: 0, sewing: 0, gaming: 0 },
     appearance: createAppearance(rng, stage, familyHint, 'Sibling'),
@@ -358,6 +366,7 @@ function createExistingSibling(rng, familyName, index, familyHint, age = null) {
     dir:'down', moving:false, currentGoal:null, activity:{type:'waiting',remaining:1,startedStamp:0}, route:null,
     school:{attendedDay:-1,grades:rng.int(42,88)}, relationships:[], alive:true,
     movedOut, adultPath, residence:movedOut ? ({college:'University dormitory',work:'Shared apartment',trade:'Boarding house'}[adultPath]) : 'Family home',
+    officialResidenceId:movedOut?`adultHome-sibling-${index}`:'familyHome', currentResidenceId:movedOut?null:'familyHome',
     partner:null, children:[], phone:{hasPhone:stage==='adult',contacts:[],unread:0}, memories:[]
   };
 }
@@ -369,7 +378,7 @@ function createNanny(rng, familyName, familyHint, tier) {
   return {
     id: `nanny-${rng.int(100000, 999999)}`,
     name: `${rng.pick(NAMES.adult)} ${rng.pick(NAMES.family)}`,
-    role: 'Nanny', age: rng.int(24, 56), stage: 'adult',
+    role: 'Nanny', age: rng.int(24, 56), stage: 'adult', sexAtBirth:null, officialResidenceId:'familyHome', currentResidenceId:'familyHome',
     traits, revealedTraits: Object.keys(traits), hobbies: selectHobbies(rng, traits, 2),
     appearance: createAppearance(rng, 'adult', familyHint, 'Nanny'),
     job: { id: 'nanny', label: tier >= 5 ? 'Live-in nanny' : 'Day nanny', schedule: tier >= 5 ? 'livein' : 'weekday', workplace: 'home', pay: [0, 0] },
@@ -496,9 +505,10 @@ function createInitialState(playerName, seed) {
       history: [`${player.name} was born as the ${birthOrder.label.toLowerCase()}.`, childcareDecision.childcare.reason]
     },
     household: {
-      tier: wealth.tier, label: wealth.label, money: wealth.money, food: wealth.food, reports: 0, home,
+      id:'familyHome', residenceId:'familyHome', tier: wealth.tier, label: wealth.label, money: wealth.money, food: wealth.food, reports: 0, home,
       finances: { weekIncome: 0, weekExpenses: 0, lifetimeIncome: 0, lifetimeExpenses: 0, lastRentWeek: -1, lastUtilitiesWeek: -1, nextBillsDay: 6, lastNannyPayDay: -1, lastCareSupportDay: -1, careSupportPerDay: parentCount === 1 && childcareDecision.childcare.type === 'stayHome' ? 160 : 0, ledger: [] }
     },
+    households: {}, activeResidenceId:'familyHome',
     town,
     familyTree: [
       ...parents.map(parent => ({ id: parent.id, name: parent.name, generation: 0, parentIds: [], children: childrenIds, alive: true })),
@@ -518,6 +528,14 @@ function createInitialState(playerName, seed) {
       { stamp: 0, day: 1, text: childcareDecision.childcare.reason, type: 'important' }
     ]
   };
+  state.households.familyHome = state.household;
+  for (const parent of state.parents) {
+    parent.ageAtPlayerBirth = parent.age;
+    parent.sexAtBirth = parent.appearance?.presentation === 'feminine' ? 'female' : 'male';
+  }
+  for (const person of [state.player, ...state.siblings, ...state.extendedFamily, state.nanny].filter(Boolean)) {
+    person.sexAtBirth = person.appearance?.presentation === 'feminine' ? 'female' : 'male';
+  }
   initializeV7State(state, rng);
   return state;
 }
@@ -594,6 +612,11 @@ export function ensureStateShape(state) {
   state.family.history ??= [];
   state.family.intro ??= { birthTitle: `You are ${state.player?.name || 'a new life'}`, birthBody: 'You were born into this family.', familyTitle: 'Your family', familyBody: 'Your household has its own history.', homeTitle: 'Your first home', homeBody: `The family lives in a ${state.household?.label || 'modest'} home.` };
   state.family.planningCooldownUntil ??= state.time?.totalDays + 5;
+  state.household.id ||= state.household.residenceId || 'familyHome';
+  state.household.residenceId ||= state.household.id;
+  state.households ||= {};
+  if (!state.households.familyHome && state.household.residenceId === 'familyHome') state.households.familyHome = state.household;
+  state.activeResidenceId ||= state.household.residenceId || 'familyHome';
   state.household.finances ??= { weekIncome: 0, weekExpenses: 0, lifetimeIncome: 0, lifetimeExpenses: 0, lastRentWeek: -1, lastUtilitiesWeek: -1, nextBillsDay: 6, ledger: [] };
   state.household.finances.ledger ??= [];
   state.household.finances.lastNannyPayDay ??= -1;
@@ -631,6 +654,11 @@ export function ensureStateShape(state) {
     person.hobbies ??= ['reading'];
     person.skills ??= { social: 0, cooking: 0, exercise: 0, painting: 0, music: 0, gardening: 0, sewing: 0, gaming: 0 };
     person.relationships ??= [];
+    person.sexAtBirth ||= person.appearance?.presentation === 'feminine' ? 'female' : 'male';
+    person.status ||= person.alive === false ? 'deceased' : 'alive';
+    person.officialResidenceId ||= person.movedOut ? (person.residenceId || `adultHome-${person.id}`) : 'familyHome';
+    person.currentResidenceId ??= person.location === 'home' ? person.officialResidenceId : null;
+    person.phone ||= {hasPhone:['teen','adult','elder'].includes(person.stage),contacts:[],unread:0};
   }
   state.player.controlMode ??= 'auto';
   state.player.autoEnabled ??= true;
@@ -694,15 +722,18 @@ export function getFurnitureAnchor(stateOrItem, maybeItem = null) {
   }
   const roomItem = state.household.home.rooms.find(roomEntry => roomEntry.id === item.room) || state.household.home.rooms.find(roomEntry => roomEntry.id === 'livingRoom') || state.household.home.rooms[0];
   const specs = {
-    parentBed:{rx:.08,ry:.16,rw:.48,rh:.22}, crib:{rx:.68,ry:.16,rw:.20,rh:.22}, toddlerBed:{rx:.56,ry:.60,rw:.34,rh:.18},
-    childBed:{rx:.08,ry:.16,rw:.42,rh:.18}, siblingBed:{rx:.08,ry:.58,rw:.42,rh:.18}, teenBed:{rx:.08,ry:.16,rw:.46,rh:.20}, upperBedA:{rx:.08,ry:.16,rw:.46,rh:.20}, upperBedB:{rx:.08,ry:.16,rw:.46,rh:.20}, nannyBed:{rx:.08,ry:.16,rw:.46,rh:.20}, studyDesk:{rx:.62,ry:.18,rw:.28,rh:.18}, dresser:{rx:.06,ry:.68,rw:.20,rh:.22},
+    parentBed:{rx:.08,ry:.08,rw:.54,rh:.48}, crib:{rx:.68,ry:.10,rw:.25,rh:.34}, toddlerBed:{rx:.08,ry:.08,rw:.36,rh:.50},
+    childBed:{rx:.08,ry:.08,rw:.36,rh:.50}, siblingBed:{rx:.55,ry:.08,rw:.36,rh:.50}, bunkBed:{rx:.08,ry:.08,rw:.42,rh:.54},
+    teenBed:{rx:.08,ry:.08,rw:.36,rh:.50}, upperBedA:{rx:.08,ry:.08,rw:.36,rh:.50}, upperBedB:{rx:.08,ry:.08,rw:.36,rh:.50}, nannyBed:{rx:.08,ry:.08,rw:.36,rh:.50},
+    apartmentBed:{rx:.08,ry:.08,rw:.36,rh:.50}, roommateBed:{rx:.08,ry:.08,rw:.36,rh:.50}, guestBed:{rx:.08,ry:.08,rw:.36,rh:.50},
+    studyDesk:{rx:.55,ry:.58,rw:.40,rh:.27}, dresser:{rx:.65,ry:.08,rw:.27,rh:.25}, wardrobe:{rx:.65,ry:.08,rw:.27,rh:.28},
     fridge:{rx:.72,ry:.12,rw:.20,rh:.25}, stove:{rx:.72,ry:.56,rw:.20,rh:.20}, counter:{rx:.08,ry:.12,rw:.48,rh:.14}, dishRack:{rx:.10,ry:.42,rw:.28,rh:.12}, dishwasher:{rx:.42,ry:.52,rw:.23,rh:.22},
     basicTable:{rx:.23,ry:.28,rw:.55,rh:.30}, diningSet:{rx:.18,ry:.24,rw:.64,rh:.34},
-    sofa:{rx:.08,ry:.64,rw:.46,rh:.18}, television:{rx:.14,ry:.12,rw:.32,rh:.14}, rug:{rx:.12,ry:.30,rw:.58,rh:.30}, bookshelf:{rx:.76,ry:.16,rw:.16,rh:.30}, plant:{rx:.80,ry:.72,rw:.12,rh:.12},
+    sofa:{rx:.08,ry:.57,rw:.58,rh:.27}, armchair:{rx:.70,ry:.58,rw:.22,rh:.24}, coffeeTable:{rx:.26,ry:.35,rw:.36,rh:.20}, television:{rx:.15,ry:.08,rw:.50,rh:.22}, rug:{rx:.13,ry:.28,rw:.62,rh:.35}, bookshelf:{rx:.68,ry:.12,rw:.26,rh:.26}, plant:{rx:.78,ry:.69,rw:.14,rh:.16}, floorLamp:{rx:.80,ry:.43,rw:.12,rh:.25}, wallArt:{rx:.38,ry:.05,rw:.28,rh:.18},
     exerciseMat:{rx:.54,ry:.55,rw:.32,rh:.20}, dumbbells:{rx:.78,ry:.52,rw:.14,rh:.10}, easel:{rx:.58,ry:.14,rw:.24,rh:.32}, keyboard:{rx:.55,ry:.66,rw:.34,rh:.14}, sewingKit:{rx:.60,ry:.48,rw:.24,rh:.16}, gardenKit:{rx:.80,ry:.70,rw:.14,rh:.14}, gameConsole:{rx:.48,ry:.12,rw:.20,rh:.12},
     toilet:{rx:.08,ry:.14,rw:.20,rh:.22}, sink:{rx:.66,ry:.14,rw:.24,rh:.18}, shower:{rx:.48,ry:.56,rw:.42,rh:.34}, laundryBasket:{rx:.08,ry:.68,rw:.18,rh:.20}, washingMachine:{rx:.28,ry:.62,rw:.22,rh:.26}
   };
-  const spec = specs[item.id] || {rx:.35,ry:.35,rw:.25,rh:.20};
+  const spec = item.placement || specs[item.id] || {rx:.35,ry:.35,rw:.25,rh:.20};
   const pad = .18;
   return {
     x: roomItem.x + pad + spec.rx * Math.max(1, roomItem.w - pad * 2),

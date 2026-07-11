@@ -203,10 +203,10 @@ export class UI {
       <p>${state.family.childcare?.reason || ''}</p>
     </section>`;
     this.dom.familyList.innerHTML = familyContext + members.map(person => {
-      const status = person.movedOut ? person.residence || 'Lives elsewhere' : this.simulation.getPersonStatus(person);
+      const status = person.alive === false ? `Deceased${person.deathDay != null ? ` · Day ${person.deathDay + 1}` : ''}` : person.movedOut ? person.residence || 'Lives elsewhere' : this.simulation.getPersonStatus(person);
       const isParent = state.parents.some(parent => parent.id === person.id);
       const role = isParent
-        ? `${person.job?.label || 'Caregiver'} · ${formatAge(person.age)}`
+        ? `${person.alive === false ? (person.formerJob?.label || 'Parent') : (person.job?.label || 'Caregiver')} · ${formatAge(person.age)}`
         : person.role === 'Nanny'
           ? `${person.job?.label || 'Nanny'} · ${formatAge(person.age)}`
           : `Sibling · ${formatAge(person.age)}${person.movedOut ? ` · ${person.residence}` : ''}`;
@@ -249,9 +249,9 @@ export class UI {
     const home = state.household.home;
     const chores = home.chores || {};
     const meal = home.meal || {};
-    this.dom.homeTierLabel.textContent = `${state.household.label} · ${home.layoutLabel || 'Family plan'}`;
+    this.dom.homeTierLabel.textContent = `${state.activeResidenceId==='familyHome'?state.household.label:(state.player.residence||state.household.label)} · ${home.layoutLabel || home.label || 'Home plan'}`;
     const rooms = getActiveRooms(state).map(room => ROOM_LABELS[room.id] || room.label);
-    const assignments=[state.player,...state.parents,...state.siblings,state.nanny].filter(Boolean).filter(person=>!person.movedOut).map(person=>({person,room:home.roomAssignments?.[person.id],bed:home.bedAssignments?.[person.id]}));
+    const assignments=[state.player,...state.parents,...state.siblings,state.nanny].filter(Boolean).filter(person=>person.alive!==false && (person.currentResidenceId||person.officialResidenceId||'familyHome')===(state.activeResidenceId||'familyHome')).map(person=>({person,room:home.roomAssignments?.[person.id],bed:home.bedAssignments?.[person.id]}));
     const wishlist = home.wishlist.slice(0, 5);
     const project = home.construction
       ? `<div class="home-project"><strong>${home.construction.label}</strong><span>${Math.round(home.construction.progress)}% · completes around Day ${home.construction.dueDay + 1}</span></div>`
@@ -364,13 +364,14 @@ export class UI {
   renderPhone() {
     const ids=[...new Set([...(this.state.social.contacts||[]),...(this.state.extendedFamily||[]).map(person=>person.id)])];
     const contacts=ids.map(id=>v7PersonById(this.state,id)).filter(Boolean);
-    this.dom.phoneContacts.innerHTML=contacts.length?contacts.map(person=>`<button type="button" data-phone-contact="${person.id}" class="${person.id===this.selectedPhoneContactId?'active':''}"><strong>${person.name}</strong><span>${person.role||titleCase(person.stage)} · ${person.residence||'Nearby'}</span></button>`).join(''):'<p class="empty-copy">Contacts appear after exchanging numbers or through family.</p>';
+    this.dom.phoneContacts.innerHTML=contacts.length?contacts.map(person=>`<button type="button" data-phone-contact="${person.id}" class="${person.id===this.selectedPhoneContactId?'active':''} ${person.alive===false?'memorialized':''}"><strong>${person.name}</strong><span>${person.alive===false?'Memorialized contact':`${person.role||titleCase(person.stage)} · ${person.residence||'Nearby'}`}</span></button>`).join(''):'<p class="empty-copy">Contacts appear after exchanging numbers or through family.</p>';
     for(const button of this.dom.phoneContacts.querySelectorAll('[data-phone-contact]')) button.addEventListener('click',()=>{this.selectedPhoneContactId=button.dataset.phoneContact;this.renderPhone();});
     const selected=v7PersonById(this.state,this.selectedPhoneContactId);
-    this.dom.phoneActions.hidden=!selected;
+    this.dom.phoneActions.hidden=!selected || selected.alive===false;
     if (!selected) {this.dom.phoneThread.innerHTML='<p class="empty-copy">Choose a contact.</p>';return;}
     const thread=this.state.social.threads?.[selected.id]||[];
-    this.dom.phoneThread.innerHTML=`<header class="thread-header"><strong>${selected.name}</strong><span>${selected.activity?.type==='working'?'At work':selected.activity?.type==='sleeping'?'Sleeping':'Available later'}</span></header><div class="messages">${thread.length?thread.filter(message=>message.stamp<=this.state.time.totalDays*1440+this.state.time.minute||!message.pending).map(message=>`<p class="${message.from===this.state.player.id?'sent':'received'}">${message.text}</p>`).join(''):'<p class="empty-copy">No messages yet.</p>'}</div>`;
+    const availability=selected.alive===false?'Memorialized contact':selected.activity?.type==='working'?'At work':selected.activity?.type==='sleeping'?'Sleeping':((selected.currentResidenceId||selected.officialResidenceId)===(this.state.player.currentResidenceId||this.state.player.officialResidenceId)&&selected.location==='home'&&this.state.player.location==='home'?'In the same home':'Available later');
+    this.dom.phoneThread.innerHTML=`<header class="thread-header"><strong>${selected.name}</strong><span>${availability}</span></header><div class="messages">${thread.length?thread.filter(message=>message.stamp<=this.state.time.totalDays*1440+this.state.time.minute||!message.pending).map(message=>`<p class="${message.from===this.state.player.id?'sent':'received'}">${message.text}</p>`).join(''):'<p class="empty-copy">No messages yet.</p>'}${selected.alive===false?'<p class="empty-copy">This conversation is archived. New messages cannot be sent.</p>':''}</div>`;
   }
 
   sendPhoneMessage(kind) {
@@ -471,8 +472,8 @@ export class UI {
     const relationship = isParent && this.state.family.relationship ? `
       <div class="profile-grid"><div><span>Affection</span><strong>${Math.round(this.state.family.relationship.affection)}</strong></div><div><span>Trust</span><strong>${Math.round(this.state.family.relationship.trust)}</strong></div><div><span>Tension</span><strong>${Math.round(this.state.family.relationship.tension)}</strong></div></div>` : '';
     this.dom.profileBody.innerHTML = `
-      <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : isAwaySibling ? 'Older sibling living away' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${person.movedOut ? person.residence : locationLabel(this.state, person.location || 'home')}</p></div></div>
-      <div class="profile-status"><span>Current activity</span><strong>${isResident ? person.job?.label || 'Following a town routine' : this.simulation.getPersonStatus(person)}</strong></div>
+      <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : isAwaySibling ? 'Older sibling living away' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${person.alive===false?'Deceased':person.movedOut ? person.residence : locationLabel(this.state, person.location || 'home')}</p></div></div>
+      <div class="profile-status"><span>Current activity</span><strong>${person.alive===false?'Deceased':isResident ? person.job?.label || 'Following a town routine' : this.simulation.getPersonStatus(person)}</strong></div>
       ${person.job ? `<div class="profile-status"><span>Job</span><strong>${person.job.label}</strong><small>${titleCase(person.job.schedule)} schedule · ${person.role === 'Nanny' ? `${peso(person.salaryPerDay || 0)} per day` : person.job.pay ? `${peso(person.job.pay[0])}–${peso(person.job.pay[1])} per shift` : ''}</small></div>` : ''}
       <div class="profile-grid"><div><span>Mood</span><strong>${person.moodState?.label||'Content'}</strong></div><div><span>Health</span><strong>${person.health?.status||'Well'}</strong></div><div><span>Residence</span><strong>${person.residence||'Family home'}</strong></div></div>
       ${person.health?.conditions?.length?`<div class="profile-warning"><strong>Health conditions</strong><span>${person.health.conditions.map(item=>item.label).join(' · ')}</span></div>`:''}

@@ -258,5 +258,5 @@ requestAnimationFrame(frame);
 window.__BORN_INTO_READY__ = true;
 
 if (hasLegacySave() && !hasSave()) {
-  showStartupError('Your older save cannot be opened in V7. Tap “Begin a new life” below to start playing.');
+  showStartupError('Your older save cannot be opened in V7.1. Tap “Begin a new life” below to start with consistent households and the new furniture system.');
 }
