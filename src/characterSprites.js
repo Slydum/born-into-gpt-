@@ -1,11 +1,12 @@
 import { seededPhase } from './utils.js';
 
-const ASSET_ROOT = 'assets/character';
-const ASSET_VERSION = '75';
+const ASSET_ROOT = new URL('../assets/character/', import.meta.url);
+const ASSET_VERSION = '76';
+const assetUrl = (name) => new URL(name, ASSET_ROOT).href;
 
 export const CHARACTER_SPRITE_SHEETS = {
   toddler: {
-    path: `${ASSET_ROOT}/toddler-sheet.png`,
+    path: assetUrl('toddler-sheet.png'),
     box: {
       masculine: { x: [30, 180, 330, 480], y: { down: 110, left: 390, right: 675, up: 975 }, w: 120, h: { down: 200, left: 200, right: 200, up: 180 } },
       feminine: { x: [640, 790, 940, 1090], y: { down: 110, left: 390, right: 675, up: 975 }, w: 120, h: { down: 200, left: 200, right: 200, up: 180 } }
@@ -14,7 +15,7 @@ export const CHARACTER_SPRITE_SHEETS = {
     groundOffset: 14
   },
   child: {
-    path: `${ASSET_ROOT}/child-sheet.png`,
+    path: assetUrl('child-sheet.png'),
     box: {
       masculine: { x: [105, 255, 405, 555], y: { down: 145, left: 420, right: 695, up: 970 }, w: 100, h: { down: 190, left: 190, right: 190, up: 185 } },
       feminine: { x: [690, 840, 990, 1140], y: { down: 145, left: 420, right: 695, up: 970 }, w: 100, h: { down: 190, left: 190, right: 190, up: 185 } }
@@ -23,7 +24,7 @@ export const CHARACTER_SPRITE_SHEETS = {
     groundOffset: 14
   },
   teen: {
-    path: `${ASSET_ROOT}/teen-sheet.png`,
+    path: assetUrl('teen-sheet.png'),
     box: {
       masculine: { x: [100, 250, 400, 550], y: { down: 120, left: 420, right: 695, up: 970 }, w: 110, h: { down: 240, left: 240, right: 240, up: 235 } },
       feminine: { x: [690, 840, 990, 1140], y: { down: 120, left: 420, right: 695, up: 970 }, w: 110, h: { down: 240, left: 240, right: 240, up: 235 } }
@@ -32,7 +33,7 @@ export const CHARACTER_SPRITE_SHEETS = {
     groundOffset: 15
   },
   adult: {
-    path: `${ASSET_ROOT}/adult-sheet.png`,
+    path: assetUrl('adult-sheet.png'),
     box: {
       masculine: { x: [100, 250, 400, 550], y: { down: 130, left: 425, right: 700, up: 975 }, w: 110, h: { down: 250, left: 250, right: 250, up: 240 } },
       feminine: { x: [690, 840, 990, 1140], y: { down: 130, left: 425, right: 700, up: 975 }, w: 110, h: { down: 250, left: 250, right: 250, up: 240 } }
@@ -75,6 +76,7 @@ export function preloadCharacterSprites() {
     const image = new Image();
     image.decoding = 'async';
     image.src = `${sheet.path}?v=${ASSET_VERSION}`;
+    image.onerror = () => console.error(`Character sprite failed to load: ${image.src}`);
     images.set(stage, image);
   }
   return images;

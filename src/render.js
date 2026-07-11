@@ -5,10 +5,10 @@ import {
   locationLabel, nearestObject
 } from './world.js';
 import { clamp, formatTime, seededPhase, titleCase } from './utils.js';
-import { drawTopDownCharacter } from './art.js';
+import { drawTopDownCharacter } from './art.js?v=76';
 import { assignedSleepPosition, assignedSeatPosition } from './v7.js';
 import { FURNITURE_SPRITES, preloadFurnitureSprites, resolveFurnitureSprite, drawFurnitureSprite } from './furniture.js';
-import { preloadCharacterSprites } from './characterSprites.js';
+import { preloadCharacterSprites } from './characterSprites.js?v=76';
 
 const ROOM_COLORS = {
   parentBedroom: ['#dfcda8', '#e7d7b6'],
