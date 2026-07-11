@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <meta name="theme-color" content="#172033" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>Born Into — Generational Life Sim</title>
-  <link rel="stylesheet" href="./styles.css?v=10" />
+  <title>Born Into V7 — Generations & Relationships</title>
+  <link rel="stylesheet" href="./styles.css?v=11" />
 </head>
 <body>
   <div id="startupError" class="startup-error" hidden></div>
@@ -38,6 +38,7 @@
           <canvas id="game" width="704" height="576" aria-label="Born Into game world"></canvas>
           <div id="toastLayer" class="toast-layer" aria-live="polite"></div>
           <div class="canvas-help">Tap a person to inspect them</div>
+          <div id="floorControls" class="floor-controls" hidden><button type="button" data-floor="0" class="active">Ground</button><button type="button" data-floor="1">Second</button></div>
         </div>
 
         <section class="intent-bar" aria-label="Autonomy controls">
@@ -63,6 +64,8 @@
           <button type="button" data-tab="family">Family</button>
           <button type="button" data-tab="home">Home</button>
           <button type="button" data-tab="town">Town</button>
+          <button type="button" data-tab="social">Social</button>
+          <button type="button" data-tab="life">Life</button>
         </nav>
 
         <section id="playerCardBtn" class="identity-card tappable-card" role="button" tabindex="0" data-panel-section="me">
@@ -121,6 +124,16 @@
           <div class="section-title"><h3>Town life</h3><span>Live routines</span></div>
           <div id="townSummary" class="town-summary"></div>
         </section>
+
+        <section class="panel-section" data-panel-section="social" hidden>
+          <div class="section-title"><h3>Social life</h3><span id="socialStatus">Growing</span></div>
+          <div id="socialSummary" class="social-summary"></div>
+        </section>
+
+        <section class="panel-section" data-panel-section="life" hidden>
+          <div class="section-title"><h3>Life events</h3><span>Generations</span></div>
+          <div id="lifeSummary" class="life-summary"></div>
+        </section>
       </aside>
     </section>
 
@@ -133,6 +146,7 @@
       </div>
       <button type="button" id="actionBtn" class="action-button">Interact</button>
     </section>
+    <button type="button" id="phoneBtn" class="phone-fab" hidden aria-label="Open phone">☎</button>
     <button type="button" id="cryBtn" class="cry-fab">Cry</button>
   </main>
 
@@ -155,17 +169,44 @@
         <form id="newGameForm" class="new-game-form hidden">
           <label>Character name<input id="nameInput" maxlength="18" placeholder="Random name" /></label>
           <label>World seed<div class="input-row"><input id="seedInput" maxlength="30" placeholder="Leave blank for random" /><button type="button" id="randomSeedBtn" aria-label="Randomize seed">↻</button></div></label>
+          <details class="life-settings"><summary>Life event settings</summary>
+            <label>Life difficulty<select id="lifeDifficultyInput"><option value="gentle">Gentle</option><option value="realistic" selected>Realistic</option><option value="dramatic">Dramatic</option></select></label>
+            <label>Serious illness<select id="seriousIllnessInput"><option value="off">Off</option><option value="rare" selected>Rare</option><option value="realistic">Realistic</option></select></label>
+            <label>Unexpected death<select id="unexpectedDeathInput"><option value="off">Off</option><option value="rare" selected>Rare</option><option value="realistic">Realistic</option></select></label>
+            <label>Teen pregnancy<select id="teenPregnancyInput"><option value="off">Off</option><option value="rare" selected>Rare</option><option value="realistic">Realistic</option></select></label>
+            <label>Cheating<select id="cheatingInput"><option value="off">Off</option><option value="rare" selected>Rare</option><option value="realistic">Realistic</option><option value="frequent">Frequent</option></select></label>
+            <label>Substance events<select id="substanceInput"><option value="off">Off</option><option value="mild" selected>Mild</option><option value="realistic">Realistic</option></select></label>
+            <label>Teen romance<select id="teenRomanceInput"><option value="off">Off</option><option value="age-appropriate" selected>Age-appropriate</option></select></label>
+            <label>Adult intimacy<select id="adultIntimacyInput"><option value="off">Off</option><option value="fade" selected>Fade-to-black</option></select></label>
+          </details>
           <div class="form-actions"><button type="button" id="backBtn" class="ghost-btn">Back</button><button type="submit" class="primary-btn">Be born</button></div>
         </form>
         <div id="howPanel" class="how-panel hidden">
           <p><strong>Autonomy:</strong> Your character follows school, work, meals, hobbies, errands, and sleep automatically.</p>
           <p><strong>Guide them:</strong> Choose a place and the character will walk there. Stop at any time, or take direct control.</p>
-          <p><strong>Family:</strong> You may be an only child, firstborn, middle child, youngest, or twin. Wealthy households may hire a nanny; otherwise a parent may pause work to provide childcare.</p>
-          <p><strong>Town:</strong> Residents follow their own schedules. Crowds change by hour, weekday, and location.</p>
+          <p><strong>Family:</strong> Siblings can be children, teens, or adults who already moved away. Households assign real beds, rooms, chores, meals, and caregivers.</p>
+          <p><strong>Relationships:</strong> Persistent classmates, friends, crushes, phone messages, invitations, college, work, move-outs, health, and major life events continue across generations.</p>
           <button type="button" id="howBackBtn" class="ghost-btn">Back</button>
         </div>
       </div>
     </div>
+  </div>
+
+  <div id="phoneOverlay" class="overlay hidden sheet-overlay">
+    <section class="sheet phone-sheet" role="dialog" aria-modal="true" aria-labelledby="phoneTitle">
+      <header><div><p class="eyebrow">PHONE</p><h2 id="phoneTitle">Contacts & messages</h2></div><button type="button" id="phoneCloseBtn" class="close-btn">×</button></header>
+      <div class="phone-layout">
+        <div id="phoneContacts" class="phone-contacts"></div>
+        <div id="phoneThread" class="phone-thread"><p class="empty-copy">Choose a contact.</p></div>
+      </div>
+      <div id="phoneActions" class="phone-actions" hidden>
+        <button type="button" data-message-kind="hello">Say hello</button>
+        <button type="button" data-message-kind="hobby">Talk hobbies</button>
+        <button type="button" data-message-kind="support">Offer support</button>
+        <button type="button" data-message-kind="family">Family check-in</button>
+        <button type="button" id="invitePhoneBtn">Invite out</button>
+      </div>
+    </section>
   </div>
 
   <div id="modalOverlay" class="overlay hidden">
@@ -192,6 +233,6 @@
     </section>
   </div>
 
-  <script type="module" src="./src/main.js?v=10"></script>
+  <script type="module" src="./src/main.js?v=11"></script>
 </body>
 </html>
