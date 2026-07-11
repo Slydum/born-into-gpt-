@@ -13,7 +13,7 @@ const dom = Object.fromEntries([
   'nameInput','seedInput','randomSeedBtn','backBtn','howPanel','howBackBtn','menuOverlay','modalOverlay',
   'modalEyebrow','modalTitle','modalBody','modalChoices','playerName','ageLabel','stageBadge','dayLabel','timeLabel',
   'placeLabel','moneyLabel','needsList','familyList','familyMood','objectiveTag','objectiveText','eventLog','clearLogBtn',
-  'portrait','actionBtn','cryBtn','interactionPrompt','toastLayer','ageBtn','eventBtn','childBtn','deathBtn'
+  'portrait','playerCardBtn','homeSummary','homeTierLabel','sidePanel','actionBtn','cryBtn','interactionPrompt','toastLayer','ageBtn','eventBtn','childBtn','deathBtn'
 ].map(id => [id, document.querySelector(`#${id}`)]));
 
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
@@ -84,6 +84,36 @@ const names = {
   workplaces: ['Northline Office','Town Works','Civic Center','Mabini Textiles']
 };
 
+const CARE_ACTIONS = new Set(['feeding child','comforting child','changing child','playing with child']);
+const CHILDCARE_STAGE_WEIGHT = { baby: 1, toddler: 0.8, child: 0.32, teen: 0.08, adult: 0, elder: 0 };
+const CHILDCARE_COOLDOWN = 12;
+
+function isWeekday() {
+  return (state.time.totalDays % 7) < 5;
+}
+
+function isWorkWindow(hour) {
+  return hour >= 8 && hour < 17;
+}
+
+function activeCaregiverExists(parent) {
+  return state.parents.some(other => other !== parent && CARE_ACTIONS.has(other.action) && other.actionTimer > 1.2);
+}
+
+function timeStampDayFraction() {
+  return state.time.totalDays + state.time.minute / 1440;
+}
+
+function childCareUrgency() {
+  const p = state.player;
+  return {
+    satiety: Math.max(0, 48 - p.needs.satiety),
+    comfort: Math.max(0, 42 - p.needs.comfort) + (p.crying ? 18 : 0),
+    hygiene: Math.max(0, 45 - p.needs.hygiene),
+    mood: Math.max(0, 40 - p.needs.mood)
+  };
+}
+
 function createParent(index, familyName) {
   const warm = rng.int(25, 95);
   const workEthic = rng.int(25, 95);
@@ -102,7 +132,8 @@ function createParent(index, familyName) {
     job: rng.pick(['shop clerk','office assistant','driver','teacher aide','care worker','warehouse staff']),
     location: 'home', x: (8 + index * 3) * TILE + 16, y: 8 * TILE + 16,
     action: 'settling in', actionTimer: 1, decisionTimer: rng.next() * 2,
-    target: null, travelTimer: 0, travelingTo: null, carriedPlayer: false
+    target: null, travelTimer: 0, travelingTo: null, carriedPlayer: false,
+    lastChildCareAt: -999, lastWorkDay: -1, lastErrandDay: -1
   };
   return parent;
 }
@@ -162,7 +193,7 @@ function createNewState(playerName, seed) {
     version: 1,
     seed: String(seed), rngState: rng.state,
     world: generateTown(),
-    household: {...wealth, reports: 0, cleanliness: rng.int(40,90), foster: false},
+    household: {...wealth, reports: 0, cleanliness: rng.int(40,90), condition: rng.int(55,92), foster: false, upgrades: {childBed:false, decorLevel:Math.max(0, wealth.tier-2), rug:wealth.tier>=3, sofa:wealth.tier>=4, plant:wealth.tier>=5, studyDesk:false, wallPaint:wealth.tier>=4}},
     time: {day: 1, minute: 7*60, totalDays: 0},
     player, parents,
     parentRelationship: parentCount === 2 ? {affection:rng.int(35,85), trust:rng.int(35,85), tension:rng.int(5,45)} : null,
@@ -199,17 +230,28 @@ function createChild(reason = 'A new child joined the family.') {
 
 function sceneObjects(scene = state?.scene) {
   if (!state) return [];
-  if (scene === 'home') return [
-    {id:'bed',type:'bed',label:'Rest in bed',x:3.5*TILE,y:3.5*TILE,w:2*TILE,h:TILE,solid:true},
-    {id:'crib',type:'crib',label:'Crib',x:5.5*TILE,y:4*TILE,w:TILE,h:TILE,solid:true},
-    {id:'fridge',type:'fridge',label:'Get food',x:18*TILE,y:3.5*TILE,w:TILE,h:TILE,solid:true},
-    {id:'stove',type:'stove',label:'Touch the stove',x:19*TILE,y:5*TILE,w:TILE,h:TILE,solid:true},
-    {id:'table',type:'table',label:'Sit at the table',x:15*TILE,y:9*TILE,w:3*TILE,h:2*TILE,solid:true},
-    {id:'toy',type:'toy',label:'Play with toy',x:9*TILE,y:11*TILE,w:TILE,h:TILE,solid:false},
-    {id:'book',type:'book',label:'Look at books',x:3*TILE,y:10*TILE,w:TILE,h:2*TILE,solid:true},
-    {id:'door',type:'exit',label:'Go outside',x:11*TILE,y:17*TILE,w:TILE,h:TILE,solid:false},
-    ...(state.player.stage === 'adult' ? [{id:'family',type:'family',label:'Talk about starting a family',x:7*TILE,y:3*TILE,w:TILE,h:TILE,solid:false}] : [])
-  ];
+  if (scene === 'home') {
+    const upgrades = state.household.upgrades || {};
+    const sleepObject = state.player.stage === 'baby'
+      ? {id:'crib',type:'crib',label:'Crib',x:5.5*TILE,y:4*TILE,w:TILE,h:TILE,solid:true}
+      : upgrades.childBed
+        ? {id:'childbed',type:'childbed',label:'Your bed',x:6*TILE,y:4*TILE,w:2*TILE,h:TILE,solid:true}
+        : {id:'floorbed',type:'floorbed',label:'Temporary sleeping mat',x:5.8*TILE,y:4*TILE,w:1.6*TILE,h:.8*TILE,solid:true};
+    return [
+      {id:'bed',type:'bed',label:'Parents’ bed',x:3.5*TILE,y:3.5*TILE,w:2*TILE,h:TILE,solid:true},
+      sleepObject,
+      {id:'fridge',type:'fridge',label:'Get food',x:18*TILE,y:3.5*TILE,w:TILE,h:TILE,solid:true},
+      {id:'stove',type:'stove',label:'Touch the stove',x:19*TILE,y:5*TILE,w:TILE,h:TILE,solid:true},
+      {id:'table',type:'table',label:'Sit at the table',x:15*TILE,y:9*TILE,w:3*TILE,h:2*TILE,solid:true},
+      {id:'toy',type:'toy',label:'Play with toy',x:9*TILE,y:11*TILE,w:TILE,h:TILE,solid:false},
+      {id:'book',type:'book',label:upgrades.studyDesk?'Study at your desk':'Look at books',x:3*TILE,y:10*TILE,w:TILE,h:2*TILE,solid:true},
+      ...(upgrades.rug ? [{id:'rug',type:'rug',label:'A warm rug',x:11*TILE,y:12*TILE,w:4*TILE,h:2*TILE,solid:false}] : []),
+      ...(upgrades.sofa ? [{id:'sofa',type:'sofa',label:'Relax on the sofa',x:15*TILE,y:13*TILE,w:3*TILE,h:TILE,solid:true}] : []),
+      ...(upgrades.plant ? [{id:'plant',type:'plant',label:'House plant',x:20*TILE,y:13*TILE,w:TILE,h:TILE,solid:false}] : []),
+      {id:'door',type:'exit',label:'Go outside',x:11*TILE,y:17*TILE,w:TILE,h:TILE,solid:false},
+      ...(state.player.stage === 'adult' ? [{id:'family',type:'family',label:'Talk about starting a family',x:7*TILE,y:3*TILE,w:TILE,h:TILE,solid:false}] : [])
+    ];
+  }
   if (scene === 'town') {
     return state.world.locations.map(loc => ({
       id:`enter-${loc.type}`, type:'enter', target:loc.type, label:`Enter ${loc.name}`,
@@ -328,6 +370,24 @@ function ensureStateShape() {
   state.memoryFlags ||= {};
   state.log ||= [];
   state.household.reports ||= 0;
+  state.household.condition ??= 70;
+  state.household.upgrades ||= {};
+  const upgrades = state.household.upgrades;
+  upgrades.childBed ??= false;
+  upgrades.decorLevel ??= Math.max(0, (state.household.tier || 2) - 2);
+  upgrades.rug ??= upgrades.decorLevel >= 1;
+  upgrades.sofa ??= upgrades.decorLevel >= 2;
+  upgrades.plant ??= upgrades.decorLevel >= 3;
+  upgrades.studyDesk ??= false;
+  upgrades.wallPaint ??= upgrades.decorLevel >= 2;
+  state.parents.forEach(parent => {
+    parent.lastChildCareAt ??= -999;
+    parent.lastWorkDay ??= -1;
+    parent.lastErrandDay ??= -1;
+    parent.lastDecorDay ??= -1;
+    const careNoLongerNeeded = parent.action === 'feeding child' && (state.household.food <= 0 || state.player.needs.satiety >= 55 || !['baby','toddler'].includes(state.player.stage));
+    if (careNoLongerNeeded) { parent.actionTimer = 0; parent.decisionTimer = 0; }
+  });
   state.scene ||= 'home';
 }
 
@@ -360,6 +420,7 @@ function dailyReset() {
     state.parentRelationship.affection = clamp(state.parentRelationship.affection + rng.int(-2,2));
   }
   state.household.cleanliness = clamp(state.household.cleanliness - rng.int(1,4));
+  state.household.condition = clamp(state.household.condition - rng.int(0,2));
   if (['child','teen'].includes(state.player.stage) && (state.time.totalDays - 1) % 7 < 5 && !attendedYesterday) {
     state.player.school.truancy++;
   }
@@ -399,11 +460,15 @@ function updatePlayerNeeds(dt) {
   const mult = SPEEDS[speedIndex];
   const n = state.player.needs;
   const stage = state.player.stage;
-  n.satiety = clamp(n.satiety - dt * mult * (stage === 'baby' ? .8 : .42));
-  n.energy = clamp(n.energy - dt * mult * .22);
-  n.hygiene = clamp(n.hygiene - dt * mult * .16);
-  n.comfort = clamp(n.comfort - dt * mult * (stage === 'baby' ? .24 : .1));
-  n.mood = clamp(n.mood + dt * mult * ((n.satiety > 40 && n.comfort > 40) ? .03 : -.16));
+  const satietyDecay = {baby:.8,toddler:.34,child:.22,teen:.2,adult:.18,elder:.2}[stage] ?? .22;
+  const energyDecay = {baby:.16,toddler:.2,child:.16,teen:.18,adult:.16,elder:.18}[stage] ?? .16;
+  const hygieneDecay = {baby:.16,toddler:.11,child:.09,teen:.08,adult:.07,elder:.08}[stage] ?? .08;
+  const comfortDecay = {baby:.24,toddler:.12,child:.08,teen:.06,adult:.05,elder:.06}[stage] ?? .08;
+  n.satiety = clamp(n.satiety - dt * mult * satietyDecay);
+  n.energy = clamp(n.energy - dt * mult * energyDecay);
+  n.hygiene = clamp(n.hygiene - dt * mult * hygieneDecay);
+  n.comfort = clamp(n.comfort - dt * mult * comfortDecay);
+  n.mood = clamp(n.mood + dt * mult * ((n.satiety > 40 && n.comfort > 40) ? .03 : -.12));
   if (n.satiety < 12 || n.hygiene < 10 || n.comfort < 8) n.health = clamp(n.health - dt * mult * .12);
   else n.health = clamp(n.health + dt * mult * .012);
 
@@ -474,18 +539,60 @@ function parentActionOptions(parent) {
   const p = state.player;
   const n = parent.needs;
   const hour = state.time.minute / 60;
-  const careNeed = 100 - ((p.needs.satiety+p.needs.hygiene+p.needs.comfort)/3);
+  const weekday = isWeekday();
+  const workWindow = weekday && isWorkWindow(hour);
+  const afterWork = hour >= 17 && hour < 20;
+  const care = childCareUrgency();
+  const childStageWeight = CHILDCARE_STAGE_WEIGHT[p.stage] ?? 0;
+  const careCooldown = Math.max(0, CHILDCARE_COOLDOWN - ((timeStampDayFraction() - parent.lastChildCareAt) * 1440));
+  const anotherHelping = activeCaregiverExists(parent);
+  const moneyPressure = Math.max(0, 320 - state.household.money);
+  const foodPressure = Math.max(0, 8 - state.household.food);
+  const upgrades = state.household.upgrades;
+  const bedCost = 140;
+  const deskCost = 110;
+  const decorCost = 80 + upgrades.decorLevel * 45;
+  const desiredDecor = Math.min(4, Math.max(1, state.household.tier));
+  const canBuyBed = p.age >= 2 && p.age < 13 && !upgrades.childBed && state.household.money >= bedCost;
+  const canBuyDesk = p.stage === 'child' && !upgrades.studyDesk && state.household.money >= deskCost + 80;
+  const canDecorate = upgrades.decorLevel < desiredDecor && state.household.money >= decorCost + 120 && parent.lastDecorDay !== state.time.totalDays;
   const opts = [
-    {name:'sleeping',score:(100-n.energy)*1.2 + (hour>22||hour<6?42:0),loc:'home',target:{x:4*TILE,y:4*TILE},duration:6},
-    {name:'eating',score:(100-n.satiety)*.9,loc:'home',target:{x:18*TILE,y:4*TILE},duration:3},
-    {name:'buying groceries',score:(12-state.household.food)*6 + (state.household.food<3?55:0),loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:7},
-    {name:'working',score:(hour>=8&&hour<=17?35:0)+(350-state.household.money)*.08+parent.traits.workEthic*.35,loc:'workplace',target:{x:11*TILE,y:7*TILE},duration:9},
-    {name:'relaxing',score:n.stress*.75+(100-n.mood)*.2,loc:'home',target:{x:14*TILE,y:10*TILE},duration:5},
-    {name:'cleaning',score:(100-state.household.cleanliness)*.55+parent.traits.responsibility*.15,loc:'home',target:{x:12*TILE,y:8*TILE},duration:5},
-    {name:'playing with child',score:parent.traits.warmth*.35 + (100-n.stress)*.1 + (p.stage!=='adult'?15:0),loc:p.location,target:{x:p.x,y:p.y},duration:4},
-    {name:'feeding child',score:(100-p.needs.satiety)*1.2 + careNeed*.4 + (p.stage==='baby'?15:0),loc:p.location,target:{x:p.x,y:p.y},duration:3},
-    {name:'comforting child',score:(p.crying?95:0)+(100-p.needs.comfort)*1.1+parent.traits.warmth*.28-parent.needs.stress*.35,loc:p.location,target:{x:p.x,y:p.y},duration:3},
-    {name:'changing child',score:(100-p.needs.hygiene)*1.0+parent.traits.responsibility*.25,loc:p.location,target:{x:p.x,y:p.y},duration:3}
+    {name:'sleeping',score:(100-n.energy)*1.35 + (hour>22||hour<6?42:0),loc:'home',target:{x:4*TILE,y:4*TILE},duration:6},
+    {name:'eating',score:(100-n.satiety)*1.05,loc:'home',target:{x:18*TILE,y:4*TILE},duration:3},
+    {name:'buying groceries',score:foodPressure*12 + (state.household.food<3?55:0) + (afterWork?16:0) - (workWindow?12:0),loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:7},
+    {name:'working',score:(workWindow?88:8) + moneyPressure*.16 + parent.traits.workEthic*.5 - (100-n.energy)*.28 - (parent.struggle==='burnout'?14:0),loc:'workplace',target:{x:11*TILE,y:7*TILE},duration:9},
+    {name:'relaxing',score:n.stress*.7 + (100-n.mood)*.25 + (!workWindow?8:0),loc:'home',target:{x:14*TILE,y:10*TILE},duration:5},
+    {name:'cleaning',score:(100-state.household.cleanliness)*.55 + parent.traits.responsibility*.16 + (!workWindow?8:0),loc:'home',target:{x:12*TILE,y:8*TILE},duration:5},
+    {name:'repairing the house',score:state.household.condition<55?(100-state.household.condition)*1.15+parent.traits.responsibility*.2:-999,loc:'home',target:{x:12*TILE,y:8*TILE},duration:7},
+    {name:'buying a child bed',score:canBuyBed?(workWindow?62:118)+(100-p.needs.energy)*.22+parent.traits.responsibility*.2:-999,loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:8},
+    {name:'buying a study desk',score:canBuyDesk?(workWindow?24:68)+parent.traits.responsibility*.2:-999,loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:8},
+    {name:'shopping for home decor',score:canDecorate?(afterWork?64:28)+(state.household.money-350)*.025+parent.traits.responsibility*.1:-999,loc:'grocery',target:{x:17*TILE,y:13*TILE},duration:8},
+    {
+      name:'playing with child',
+      score: childStageWeight > 0 ? Math.max(0, parent.traits.warmth*.22 + care.mood*1.2 + (afterWork?18:0) + (p.stage==='toddler'?15:0) - n.stress*.18 - (anotherHelping?26:0)) : -999,
+      loc:p.location,target:{x:p.x,y:p.y},duration:4
+    },
+    {
+      name:'feeding child',
+      score: (state.household.food > 0 && childStageWeight > 0 && care.satiety > 0)
+        ? Math.max(0, care.satiety*3.2*childStageWeight + (p.stage==='baby'?18:0) - careCooldown*2.2 - (anotherHelping?42:0))
+        : -999,
+      loc:p.location,target:{x:p.x,y:p.y},duration:3
+    },
+    {
+      name:'comforting child',
+      score: childStageWeight > 0
+        ? Math.max(0, (p.crying?75:0) + care.comfort*2.6*childStageWeight + parent.traits.warmth*.18 - n.stress*.22 - (anotherHelping?38:0))
+        : -999,
+      loc:p.location,target:{x:p.x,y:p.y},duration:3
+    },
+    {
+      name:'changing child',
+      score: childStageWeight > 0 && care.hygiene > 0
+        ? Math.max(0, care.hygiene*2.8*childStageWeight + parent.traits.responsibility*.15 - (anotherHelping?34:0))
+        : -999,
+      loc:p.location,target:{x:p.x,y:p.y},duration:3
+    }
   ];
   if (state.parentRelationship && state.parentRelationship.tension > 60) {
     opts.push({name:'arguing',score:state.parentRelationship.tension*.55+parent.traits.impulsiveness*.35,loc:'home',target:{x:11*TILE,y:8*TILE},duration:4});
@@ -493,7 +600,7 @@ function parentActionOptions(parent) {
   if (parent.struggle) {
     opts.push({name:'withdrawing',score:parent.needs.stress*.7+parent.traits.impulsiveness*.25,loc:'home',target:{x:3*TILE,y:13*TILE},duration:6});
   }
-  opts.forEach(o => o.score += rng.next()*9);
+  opts.forEach(o => o.score += rng.next()*6);
   return opts.sort((a,b)=>b.score-a.score);
 }
 
@@ -521,17 +628,28 @@ function completeParentAction(parent) {
     case 'sleeping': pn.energy=clamp(pn.energy+55); pn.stress=clamp(pn.stress-15); break;
     case 'eating': if(state.household.food>0){state.household.food--;pn.satiety=clamp(pn.satiety+55);} break;
     case 'buying groceries': {
-      const spend = Math.min(state.household.money, rng.int(18,42));
-      state.household.money -= spend; state.household.food += Math.max(2,Math.round(spend/4));
+      const spend = Math.min(state.household.money, rng.int(24,46));
+      state.household.money -= spend; state.household.food += Math.max(3,Math.round(spend/4));
+      parent.lastErrandDay = state.time.totalDays;
       break;
     }
-    case 'working': state.household.money += rng.int(26,52); pn.energy=clamp(pn.energy-18); pn.stress=clamp(pn.stress+8); break;
+    case 'working': state.household.money += rng.int(26,52); pn.energy=clamp(pn.energy-18); pn.stress=clamp(pn.stress+8); parent.lastWorkDay = state.time.totalDays; break;
     case 'relaxing': pn.stress=clamp(pn.stress-28);pn.mood=clamp(pn.mood+18);break;
     case 'cleaning': state.household.cleanliness=clamp(state.household.cleanliness+25);pn.energy=clamp(pn.energy-8);break;
-    case 'playing with child': state.player.needs.mood=clamp(state.player.needs.mood+22);state.player.needs.comfort=clamp(state.player.needs.comfort+18);state.player.development.stimulation=clamp(state.player.development.stimulation+4);state.player.development.bonding=clamp(state.player.development.bonding+3);break;
-    case 'feeding child': if(state.household.food>0){state.household.food--;state.player.needs.satiety=clamp(state.player.needs.satiety+62);state.player.crying=false;state.player.development.bonding=clamp(state.player.development.bonding+2);}break;
-    case 'comforting child': state.player.needs.comfort=clamp(state.player.needs.comfort+52);state.player.needs.mood=clamp(state.player.needs.mood+24);state.player.crying=false;state.player.development.bonding=clamp(state.player.development.bonding+3);break;
-    case 'changing child': state.player.needs.hygiene=clamp(state.player.needs.hygiene+68);state.player.needs.comfort=clamp(state.player.needs.comfort+12);break;
+    case 'repairing the house': state.household.condition=clamp(state.household.condition+32);state.household.money=Math.max(0,state.household.money-35);pn.energy=clamp(pn.energy-12);addLog(`${parent.name.split(' ')[0]} repaired worn parts of the house.`);break;
+    case 'buying a child bed':
+      if(!state.household.upgrades.childBed && state.household.money>=140){state.household.money-=140;state.household.upgrades.childBed=true;parent.lastErrandDay=state.time.totalDays;toast(`${parent.name.split(' ')[0]} bought you a proper bed.`);addLog(`${parent.name} bought a child-sized bed for ${state.player.name}.`);}break;
+    case 'buying a study desk':
+      if(!state.household.upgrades.studyDesk && state.household.money>=110){state.household.money-=110;state.household.upgrades.studyDesk=true;parent.lastErrandDay=state.time.totalDays;toast('A study desk was added to your room.');addLog(`${parent.name} bought a study desk for the house.`);}break;
+    case 'shopping for home decor': {
+      const upgrades=state.household.upgrades;
+      const cost=80+upgrades.decorLevel*45;
+      if(state.household.money>=cost){state.household.money-=cost;upgrades.decorLevel=Math.min(4,upgrades.decorLevel+1);upgrades.rug=upgrades.decorLevel>=1;upgrades.wallPaint=upgrades.decorLevel>=2;upgrades.sofa=upgrades.decorLevel>=3;upgrades.plant=upgrades.decorLevel>=4;parent.lastDecorDay=state.time.totalDays;toast(`${parent.name.split(' ')[0]} improved the house.`);addLog(`${parent.name} spent ${peso(cost)} improving the home.`);}break;
+    }
+    case 'playing with child': state.player.needs.mood=clamp(state.player.needs.mood+22);state.player.needs.comfort=clamp(state.player.needs.comfort+18);state.player.development.stimulation=clamp(state.player.development.stimulation+4);state.player.development.bonding=clamp(state.player.development.bonding+3); parent.lastChildCareAt = timeStampDayFraction(); break;
+    case 'feeding child': if(state.household.food>0){state.household.food--;state.player.needs.satiety=Math.max(state.player.needs.satiety, 82);state.player.needs.comfort=clamp(state.player.needs.comfort+8);state.player.crying=false;state.player.development.bonding=clamp(state.player.development.bonding+2); parent.lastChildCareAt = timeStampDayFraction();}break;
+    case 'comforting child': state.player.needs.comfort=Math.max(state.player.needs.comfort, 76);state.player.needs.mood=clamp(state.player.needs.mood+24);state.player.crying=false;state.player.development.bonding=clamp(state.player.development.bonding+3); parent.lastChildCareAt = timeStampDayFraction(); break;
+    case 'changing child': state.player.needs.hygiene=Math.max(state.player.needs.hygiene, 84);state.player.needs.comfort=clamp(state.player.needs.comfort+12); parent.lastChildCareAt = timeStampDayFraction(); break;
     case 'arguing': if(state.parentRelationship){state.parentRelationship.tension=clamp(state.parentRelationship.tension+12);state.parentRelationship.affection=clamp(state.parentRelationship.affection-5);state.player.development.stressExposure=clamp(state.player.development.stressExposure+4);}break;
     case 'withdrawing': pn.stress=clamp(pn.stress-8);pn.mood=clamp(pn.mood-4);break;
   }
@@ -622,8 +740,13 @@ function interact() {
   if(!o){toast('Nothing nearby to interact with.');return;}
   const p=state.player,n=p.needs;
   switch(o.type){
-    case 'bed': n.energy=clamp(n.energy+45);n.mood=clamp(n.mood+5);addLog('You rested at home.');break;
+    case 'bed': n.energy=clamp(n.energy+35);n.mood=clamp(n.mood+4);addLog('You rested in the adults’ bed.');break;
     case 'crib': n.energy=clamp(n.energy+28);break;
+    case 'childbed': n.energy=clamp(n.energy+58);n.comfort=clamp(n.comfort+18);toast('Your own bed feels safe and comfortable.');break;
+    case 'floorbed': n.energy=clamp(n.energy+26);n.comfort=clamp(n.comfort+3);toast('The temporary sleeping mat is better than the floor, but not very comfortable.');break;
+    case 'sofa': n.energy=clamp(n.energy+18);n.mood=clamp(n.mood+10);toast('You relax on the sofa.');break;
+    case 'rug': n.comfort=clamp(n.comfort+5);toast('The rug makes the room feel warmer.');break;
+    case 'plant': n.mood=clamp(n.mood+4);toast('The plant makes the room feel alive.');break;
     case 'fridge': if(state.household.food>0){state.household.food--;n.satiety=clamp(n.satiety+55);toast('You ate something from the fridge.');}else toast('The refrigerator is empty.');break;
     case 'stove': hazard('stove');break;
     case 'toy': p.development.curiosity=clamp(p.development.curiosity+8);p.development.stimulation=clamp(p.development.stimulation+5);n.mood=clamp(n.mood+18);toast('Play builds curiosity.');break;
@@ -826,6 +949,99 @@ function objectiveForStage() {
   return p.children.length?'Protect your health and prepare the next generation to continue.':'Your lineage has no heir yet. Health risks increase with age.';
 }
 
+function traitLines(traits) {
+  return Object.entries(traits || {}).map(([name,value]) => `${titleCase(name)}: ${Math.round(value)}`).join('\n');
+}
+
+function showPlayerDetails() {
+  if (!state || modalOpen) return;
+  const p = state.player;
+  const knownTraits = p.traits.length ? p.traits.join(', ') : 'Still emerging';
+  const body = [
+    `Age: ${formatAge(p.age)}`,
+    `Life stage: ${titleCase(p.stage)}`,
+    `Generation: ${p.generation}`,
+    `Known traits: ${knownTraits}`,
+    '',
+    'DEVELOPMENT',
+    `Bonding: ${Math.round(p.development.bonding)}`,
+    `Curiosity: ${Math.round(p.development.curiosity)}`,
+    `Resilience: ${Math.round(p.development.resilience)}`,
+    `Grades: ${Math.round(p.development.grades)}`,
+    `Stress exposure: ${Math.round(p.development.stressExposure)}`
+  ].join('\n');
+  showModal('YOUR CHARACTER', p.name, body, [{label:'Close',action:()=>{}}]);
+}
+
+function showParentDetails(parent) {
+  if (!parent || modalOpen) return;
+  const relationship = state.parentRelationship
+    ? `
+HOUSEHOLD RELATIONSHIP
+Affection: ${Math.round(state.parentRelationship.affection)}
+Trust: ${Math.round(state.parentRelationship.trust)}
+Tension: ${Math.round(state.parentRelationship.tension)}`
+    : '';
+  const body = [
+    `Age: ${Math.floor(parent.age)}`,
+    `Role: ${parent.role || 'Parent'}`,
+    `Job: ${titleCase(parent.job || 'Unemployed')}`,
+    `Current location: ${titleCase(parent.location)}`,
+    `Current action: ${parent.travelingTo ? `Going to ${titleCase(parent.travelingTo)}` : titleCase(parent.action || 'Idle')}`,
+    `Struggle: ${parent.struggle ? titleCase(parent.struggle) : 'None known'}`,
+    '',
+    'TRAITS',
+    traitLines(parent.traits),
+    '',
+    'NEEDS',
+    `Energy: ${Math.round(parent.needs.energy)}`,
+    `Hunger: ${Math.round(parent.needs.satiety)}`,
+    `Stress: ${Math.round(parent.needs.stress)}`,
+    `Mood: ${Math.round(parent.needs.mood)}`,
+    relationship
+  ].join('\n');
+  showModal('PARENT PROFILE', parent.name, body, [{label:'Close',action:()=>{}}]);
+}
+
+function showChildDetails(child) {
+  if (!child || modalOpen) return;
+  const body = [
+    `Age: ${formatAge(child.age || 0)}`,
+    `Life stage: ${titleCase(child.stage || stageForAge(child.age || 0))}`,
+    `Health: ${Math.round(child.needs?.health ?? child.health ?? 85)}`,
+    `Traits: ${(child.traits || []).join(', ') || 'Still emerging'}`
+  ].join('\n');
+  showModal('FAMILY MEMBER', child.name, body, [{label:'Close',action:()=>{}}]);
+}
+
+function handleCanvasTap(event) {
+  if (!state || modalOpen || !dom.menuOverlay.classList.contains('hidden')) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (event.clientX - rect.left) * canvas.width / rect.width;
+  const y = (event.clientY - rect.top) * canvas.height / rect.height;
+  const people = [];
+  if (!state.player.carriedBy || state.parents.some(parent => parent.id === state.player.carriedBy && parent.location === state.scene)) {
+    people.push({kind:'player', entity:state.player, x:state.player.x, y:state.player.y});
+  }
+  state.parents.forEach(parent => {
+    if (parent.location === state.scene && !parent.travelingTo) people.push({kind:'parent', entity:parent, x:parent.x, y:parent.y});
+  });
+  let nearest = null;
+  for (const person of people) {
+    const distance = Math.hypot(x-person.x, y-person.y);
+    if (distance <= 38 && (!nearest || distance < nearest.distance)) nearest = {...person,distance};
+  }
+  if (!nearest) return;
+  if (nearest.kind === 'player') showPlayerDetails();
+  else showParentDetails(nearest.entity);
+}
+
+function setMobilePanel(panel) {
+  document.querySelectorAll('.mobile-tab').forEach(button => button.classList.toggle('active', button.dataset.mobileTab === panel));
+  document.querySelectorAll('[data-panel-section]').forEach(section => section.classList.toggle('mobile-hidden', section.dataset.panelSection !== panel));
+  if (dom.sidePanel) dom.sidePanel.scrollTop = 0;
+}
+
 function updateUI(force=false) {
   if(!state)return;
   const p=state.player;
@@ -848,9 +1064,23 @@ function updateUI(force=false) {
   const needs=[['Health',p.needs.health],['Energy',p.needs.energy],['Food',p.needs.satiety],['Comfort',p.needs.comfort],['Hygiene',p.needs.hygiene],['Mood',p.needs.mood]];
   dom.needsList.innerHTML=needs.map(([label,value])=>`<div class="bar-row"><span>${label}</span><div class="bar-track"><div class="bar-fill ${value<20?'danger':value<40?'warning':''}" style="width:${clamp(value)}%"></div></div><b>${Math.round(value)}</b></div>`).join('');
 
-  const family=[...state.parents.map(par=>({name:par.name,role:par.role||'Parent',action:par.travelingTo?`Going to ${par.travelingTo}`:par.action})),...p.children.map(c=>({name:c.name,role:`Child · ${formatAge(c.age)}`,action:c.stage}))];
-  if(p.partner)family.push({name:p.partner.name,role:'Partner',action:`Affection ${Math.round(p.partner.affection)}`});
-  dom.familyList.innerHTML=family.length?family.map(m=>`<div class="family-member"><div class="member-icon">${m.name[0]}</div><div class="member-copy"><strong>${m.name}</strong><span>${m.role}</span></div><div class="member-action">${m.action}</div></div>`).join(''):'<p class="objective">No household members are present.</p>';
+  const family=[
+    ...state.parents.map(parent=>({name:parent.name,role:parent.role||'Parent',action:parent.travelingTo?`Going to ${titleCase(parent.travelingTo)}`:titleCase(parent.action || 'Idle'),onOpen:()=>showParentDetails(parent)})),
+    ...p.children.map(child=>({name:child.name,role:`Child · ${formatAge(child.age)}`,action:titleCase(child.stage),onOpen:()=>showChildDetails(child)}))
+  ];
+  if(p.partner)family.push({name:p.partner.name,role:'Partner',action:`Affection ${Math.round(p.partner.affection)}`,onOpen:()=>showChildDetails({...p.partner,age:p.age,stage:'adult'})});
+  dom.familyList.innerHTML='';
+  if(!family.length){dom.familyList.innerHTML='<p class="objective">No household members are present.</p>';}
+  else family.forEach(member=>{
+    const button=document.createElement('button');button.type='button';button.className='family-member-button';
+    button.innerHTML=`<div class="member-icon">${member.name[0]}</div><div class="member-copy"><strong>${member.name}</strong><span>${member.role}</span></div><div class="member-action">${member.action}</div>`;
+    button.addEventListener('click',member.onOpen);dom.familyList.appendChild(button);
+  });
+  const upgrades=state.household.upgrades;
+  dom.homeTierLabel.textContent=state.household.label;
+  const sleepingPlace=p.stage==='baby'?'Crib':upgrades.childBed?'Child bed':'Temporary sleeping mat';
+  const upgradeNames=[sleepingPlace,upgrades.rug?'Rug':null,upgrades.wallPaint?'Painted walls':null,upgrades.sofa?'Sofa':null,upgrades.plant?'House plant':null,upgrades.studyDesk?'Study desk':null].filter(Boolean);
+  dom.homeSummary.innerHTML=`<div class="home-row"><span>Condition</span><strong>${Math.round(state.household.condition)} / 100</strong></div><div class="home-row"><span>Cleanliness</span><strong>${Math.round(state.household.cleanliness)} / 100</strong></div><div class="home-row"><span>Food</span><strong>${Math.round(state.household.food)} portions</strong></div><div class="home-upgrades">${upgradeNames.map(name=>`<span class="home-chip">${name}</span>`).join('')}</div>`;
   dom.eventLog.innerHTML=state.log.slice(0,8).map(item=>`<div class="log-item"><b>Day ${item.day}</b> ${item.text}</div>`).join('');
   dom.portrait.innerHTML=`<div style="position:absolute;left:17px;top:11px;width:28px;height:28px;background:#d89e6b;border:3px solid #172033"></div><div style="position:absolute;left:13px;top:8px;width:36px;height:11px;background:${p.generation%2?'#4b342f':'#312e45'}"></div><div style="position:absolute;left:22px;top:24px;width:4px;height:4px;background:#172033;box-shadow:12px 0 #172033"></div><div style="position:absolute;left:21px;bottom:5px;width:22px;height:18px;background:${p.stage==='baby'?'#e8b765':'#668ca2'};border:3px solid #172033"></div>`;
 }
@@ -893,11 +1123,15 @@ function drawParkLot(loc){
 
 function drawHome(){
   const tier=state.household.tier;
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)drawTile(x,y,tier>=4?'#d7c79f':'#cbb990',tier>=4?'#ddcea8':'#d1c09a');
-  ctx.fillStyle='#6e544b';ctx.fillRect(0,0,canvas.width,TILE);ctx.fillRect(0,0,TILE,canvas.height);ctx.fillRect(canvas.width-TILE,0,TILE,canvas.height);ctx.fillRect(0,canvas.height-TILE,10*TILE,TILE);ctx.fillRect(12*TILE,canvas.height-TILE,10*TILE,TILE);
-  ctx.fillStyle='#8b6a59';ctx.fillRect(12*TILE,TILE,8,8*TILE);ctx.fillRect(TILE,8*TILE,11*TILE,8);
+  const upgrades=state.household.upgrades || {};
+  const painted=upgrades.wallPaint;
+  const floorA=painted?'#d8c9a6':tier>=4?'#d7c79f':'#cbb990';
+  const floorB=painted?'#e2d4b3':tier>=4?'#ddcea8':'#d1c09a';
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)drawTile(x,y,floorA,floorB);
+  ctx.fillStyle=painted?'#5d6f7b':'#6e544b';ctx.fillRect(0,0,canvas.width,TILE);ctx.fillRect(0,0,TILE,canvas.height);ctx.fillRect(canvas.width-TILE,0,TILE,canvas.height);ctx.fillRect(0,canvas.height-TILE,10*TILE,TILE);ctx.fillRect(12*TILE,canvas.height-TILE,10*TILE,TILE);
+  ctx.fillStyle=painted?'#74858c':'#8b6a59';ctx.fillRect(12*TILE,TILE,8,8*TILE);ctx.fillRect(TILE,8*TILE,11*TILE,8);
   ctx.fillStyle='#a8c8c6';ctx.fillRect(7*TILE,0,3*TILE,TILE-8);ctx.fillRect(15*TILE,0,3*TILE,TILE-8);
-  ctx.fillStyle='#84705e';ctx.font='10px monospace';ctx.textAlign='left';ctx.fillText(`${state.household.label} home`,42,55);
+  ctx.fillStyle='#84705e';ctx.font='10px monospace';ctx.textAlign='left';ctx.fillText(`${state.household.label} home · decor ${upgrades.decorLevel||0}`,42,55);
 }
 
 function drawInterior(type){
@@ -915,11 +1149,16 @@ function drawObjects(){
     ctx.save();ctx.translate(x,y);
     if(o.type==='bed'){ctx.fillStyle='#76554d';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#d9d0bc';ctx.fillRect(-o.w/2+5,-o.h/2+5,o.w-10,o.h-10);ctx.fillStyle='#b6cbd0';ctx.fillRect(-o.w/2+5,-o.h/2+5,22,o.h-10);}
     if(o.type==='crib'){ctx.fillStyle='#815e4d';ctx.fillRect(-16,-16,32,32);ctx.fillStyle='#e7dbc0';ctx.fillRect(-10,-10,20,20);}
+    if(o.type==='childbed'){ctx.fillStyle='#6e5048';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#f1dfbd';ctx.fillRect(-o.w/2+5,-o.h/2+5,o.w-10,o.h-10);ctx.fillStyle='#6c95ae';ctx.fillRect(-o.w/2+5,-o.h/2+5,24,o.h-10);}
+    if(o.type==='floorbed'){ctx.fillStyle='#bda87d';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#d6c69e';ctx.fillRect(-o.w/2+4,-o.h/2+4,o.w-8,o.h-8);}
+    if(o.type==='rug'){ctx.fillStyle='#a95f56';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#d49a69';ctx.fillRect(-o.w/2+8,-o.h/2+8,o.w-16,o.h-16);}
+    if(o.type==='sofa'){ctx.fillStyle='#587f88';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#47666d';ctx.fillRect(-o.w/2,-o.h/2-8,o.w,10);ctx.fillRect(-o.w/2+5,o.h/2-2,6,10);ctx.fillRect(o.w/2-11,o.h/2-2,6,10);}
+    if(o.type==='plant'){ctx.fillStyle='#8b5e45';ctx.fillRect(-10,3,20,16);ctx.fillStyle='#5b8a54';ctx.fillRect(-4,-20,8,24);ctx.fillRect(-14,-12,12,8);ctx.fillRect(2,-16,14,8);}
     if(o.type==='fridge'){ctx.fillStyle='#d8e0dc';ctx.fillRect(-16,-16,32,32);ctx.fillStyle='#86918f';ctx.fillRect(6,-6,3,9);ctx.fillRect(-16,0,32,3);}
     if(o.type==='stove'){ctx.fillStyle='#59616a';ctx.fillRect(-16,-16,32,32);ctx.fillStyle='#272d33';for(const [a,b]of[[-8,-8],[8,-8],[-8,8],[8,8]]){ctx.beginPath();ctx.arc(a,b,5,0,7);ctx.fill();}}
     if(o.type==='table'||o.type==='study'||o.type==='work'){ctx.fillStyle='#7c5d47';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#49372e';ctx.fillRect(-o.w/2+5,o.h/2-4,5,12);ctx.fillRect(o.w/2-10,o.h/2-4,5,12);}
     if(o.type==='toy'){ctx.fillStyle='#e0a34f';ctx.fillRect(-10,-8,20,16);ctx.fillStyle='#547f9a';ctx.fillRect(-5,-14,10,6);}
-    if(o.type==='book'){ctx.fillStyle='#865a5e';ctx.fillRect(-16,-32,32,64);ctx.fillStyle='#d2b56c';for(let yy=-25;yy<25;yy+=10)ctx.fillRect(-11,yy,22,4);}
+    if(o.type==='book'){if(state.scene==='home'&&state.household.upgrades?.studyDesk){ctx.fillStyle='#7c5d47';ctx.fillRect(-26,-18,52,34);ctx.fillStyle='#49372e';ctx.fillRect(-22,16,5,18);ctx.fillRect(17,16,5,18);ctx.fillStyle='#865a5e';ctx.fillRect(-8,-24,16,12);}else{ctx.fillStyle='#865a5e';ctx.fillRect(-16,-32,32,64);ctx.fillStyle='#d2b56c';for(let yy=-25;yy<25;yy+=10)ctx.fillRect(-11,yy,22,4);}}
     if(o.type==='play'){ctx.fillStyle='#6f594a';ctx.fillRect(-30,-5,60,8);ctx.fillRect(-24,-30,5,60);ctx.fillRect(20,-30,5,60);ctx.strokeStyle='#4c4c4c';ctx.beginPath();ctx.moveTo(-12,-25);ctx.lineTo(-12,12);ctx.moveTo(12,-25);ctx.lineTo(12,12);ctx.stroke();}
     if(o.type==='checkout'){ctx.fillStyle='#6d5747';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);ctx.fillStyle='#cc6f57';ctx.fillRect(-10,-28,20,16);}
     if(o.type==='shelf'){ctx.fillStyle='#746858';ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);for(let xx=-o.w/2+5;xx<o.w/2-5;xx+=12){ctx.fillStyle=['#d46f58','#6f9b70','#d6ab57'][Math.abs(xx)%3];ctx.fillRect(xx,-9,8,18);}}
@@ -1014,6 +1253,10 @@ function bindPress(element, handler) {
 }
 
 function bindEvents(){
+  canvas.addEventListener('pointerup', handleCanvasTap);
+  bindPress(dom.playerCardBtn, showPlayerDetails);
+  dom.playerCardBtn?.addEventListener('keydown', event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();showPlayerDetails();} });
+  document.querySelectorAll('.mobile-tab').forEach(button => bindPress(button, ()=>setMobilePanel(button.dataset.mobileTab)));
   window.addEventListener('keydown',e=>{
     const k=e.key.toLowerCase();
     if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
@@ -1051,6 +1294,7 @@ function bindEvents(){
 function togglePause(){if(!state)return;paused=!paused;dom.pauseBtn.textContent=paused?'▶':'Ⅱ';toast(paused?'Paused':'Life continues');}
 
 bindEvents();
+setMobilePanel('me');
 openMainMenu();
 window.__BORN_INTO_READY__ = true;
 const startupError = document.querySelector('#startupError');

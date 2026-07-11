@@ -24,7 +24,7 @@
       }
     }, 2500);
   </script>
-  <link rel="stylesheet" href="./styles.css?v=5" />
+  <link rel="stylesheet" href="./styles.css?v=6" />
 </head>
 <body>
   <div id="startupError" class="startup-error" hidden></div>
@@ -50,10 +50,17 @@
         <canvas id="game" width="704" height="576" aria-label="Born Into game world"></canvas>
         <div id="toastLayer" aria-live="polite"></div>
         <div id="interactionPrompt" class="interaction-prompt hidden">Press E to interact</div>
+        <div class="tap-hint">Tap a person for details</div>
       </div>
 
       <aside id="sidePanel" class="side-panel">
-        <section class="identity-card">
+        <nav class="mobile-tabs" aria-label="Character panels">
+          <button type="button" class="mobile-tab active" data-mobile-tab="me">Me</button>
+          <button type="button" class="mobile-tab" data-mobile-tab="family">Family</button>
+          <button type="button" class="mobile-tab" data-mobile-tab="home">Home</button>
+        </nav>
+
+        <section id="playerCardBtn" class="identity-card tappable-card" role="button" tabindex="0" aria-label="View your character details" data-panel-section="me">
           <div id="portrait" class="portrait"></div>
           <div class="identity-copy">
             <span id="stageBadge" class="stage-badge">Baby</span>
@@ -62,29 +69,34 @@
           </div>
         </section>
 
-        <section class="world-card compact-grid">
+        <section class="world-card compact-grid" data-panel-section="me">
           <div><span>Day</span><strong id="dayLabel">1</strong></div>
           <div><span>Time</span><strong id="timeLabel">07:00</strong></div>
           <div><span>Place</span><strong id="placeLabel">Home</strong></div>
           <div><span>Money</span><strong id="moneyLabel">₱0</strong></div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section" data-panel-section="me">
           <div class="section-title"><h3>Needs</h3><button type="button" id="needsToggle" class="text-btn">Details</button></div>
           <div id="needsList" class="bars"></div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section" data-panel-section="family">
           <div class="section-title"><h3>Family</h3><span id="familyMood">Stable</span></div>
           <div id="familyList" class="family-list"></div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section" data-panel-section="me">
           <div class="section-title"><h3>Current story</h3><span id="objectiveTag">Growing</span></div>
           <p id="objectiveText" class="objective">Your life has just begun.</p>
         </section>
 
-        <section class="panel-section log-section">
+        <section class="panel-section" data-panel-section="home">
+          <div class="section-title"><h3>Household</h3><span id="homeTierLabel">Home</span></div>
+          <div id="homeSummary" class="home-summary"></div>
+        </section>
+
+        <section class="panel-section log-section" data-panel-section="me">
           <div class="section-title"><h3>Memory</h3><button type="button" id="clearLogBtn" class="text-btn">Clear</button></div>
           <div id="eventLog" class="event-log"></div>
         </section>
@@ -154,6 +166,6 @@
     </div>
   </div>
 
-  <script defer src="./main.js?v=5"></script>
+  <script defer src="./main.js?v=6"></script>
 </body>
 </html>
