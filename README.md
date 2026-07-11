@@ -1,4 +1,4 @@
-# Born Into V7.1 — Continuity & Homes
+# Born Into V7.1.2 — Return Home Hotfix
 
 A mobile-first autonomous life simulation. V7.1 focuses on keeping every system consistent when people age, die, move away, visit family, replace furniture, and begin adult life.
 
@@ -13,7 +13,8 @@ A mobile-first autonomous life simulation. V7.1 focuses on keeping every system 
 - Official residence and current location are separate, so an adult can visit family without moving back permanently.
 - Assigned beds and bedroom cleanup. Duplicate, replaced, and outgrown beds are transferred to household storage rather than accumulating in rooms.
 - Furniture ownership follows characters when portable belongings are moved.
-- Thirty transparent furniture sprites extracted from the supplied bedroom and living-room sheets.
+- The uploaded living-room artwork is loaded as one sprite atlas, with source rectangles for sofas, armchairs, television consoles, rugs, lamps, plants, and decor.
+- The browser uses a PNG alpha-compatible copy of the uploaded sheet so furniture renders without white boxes on GitHub Pages.
 - Sprite-backed beds, cribs, bunk beds, wardrobes, desks, sofas, chairs, coffee tables, rugs, lamps, plants, bookshelves, televisions, and wall art.
 - Household style profiles choose coherent furniture variants by wealth, palette, layout, and home style.
 

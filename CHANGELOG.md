@@ -1,3 +1,22 @@
+# 7.1.2 — Return-home and caregiver hotfix
+
+- Family agents keep simulating after leaving the visible residence.
+- Work shifts, shopping trips, park visits, and commutes now complete off-screen.
+- Agents choose a return-home goal instead of freezing outside forever.
+- Assigned stay-at-home caregivers bring babies on errands when no backup adult is available.
+- Babies are placed safely back at home after the caregiver returns.
+- Existing V7.1 saves remain compatible.
+
+# 7.1.1 — Living-room sprite atlas
+
+- Uses the uploaded living-room sheet directly as a single sprite atlas.
+- Adds crop metadata for sofas, armchairs, TV consoles, rugs, lamps, plants, and shelf decor.
+- Reuses one decoded image for every sprite region instead of loading duplicate files.
+- Adds source-rectangle rendering support to the canvas furniture renderer.
+- Adds green, blue, cream, and orange coordinated living-room variants.
+- Fixes the furniture metadata fallback to use `BED_FURNITURE_IDS`.
+- Bumps the browser cache key to `v=711`.
+
 # 7.1.0 — Continuity & Homes
 
 - Added a single authoritative household and residence model.
