@@ -6,11 +6,9 @@
   <meta name="theme-color" content="#172033" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Born Into V7 — Generations & Relationships</title>
-  <link rel="stylesheet" href="./styles.css?v=11" />
+  <link rel="stylesheet" href="./styles.css?v=12" />
 </head>
 <body>
-  <div id="startupError" class="startup-error" hidden></div>
-
   <main id="app" class="app-shell">
     <header class="topbar">
       <div class="brand-lockup">
@@ -161,6 +159,10 @@
         <p class="eyebrow">A LIFE BEGINS INSIDE A FAMILY</p>
         <h2>Born Into</h2>
         <p class="menu-intro">Discover the family you were born into, then watch everyone move, work, care, grow, decorate, and change across generations. Ordinary movement happens automatically—you decide when to intervene.</p>
+        <div id="startupError" class="startup-error" role="status" hidden>
+          <span id="startupErrorText"></span>
+          <button type="button" id="startupErrorClose" aria-label="Dismiss message">×</button>
+        </div>
         <div id="mainMenuButtons" class="menu-buttons">
           <button type="button" id="continueBtn" class="primary-btn">Continue life</button>
           <button type="button" id="newGameBtn" class="secondary-btn">Begin a new life</button>
@@ -233,6 +235,6 @@
     </section>
   </div>
 
-  <script type="module" src="./src/main.js?v=11"></script>
+  <script type="module" src="./src/main.js?v=12"></script>
 </body>
 </html>

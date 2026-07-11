@@ -16,7 +16,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: #111925; color: var(--ink); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+html, body { margin: 0; min-height: 100%; background: #111925; color: var(--ink); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { overflow-x: hidden; }
 button, input { font: inherit; }
 button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none; }
@@ -25,8 +25,30 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .hidden, [hidden] { display: none !important; }
 
 .startup-error {
-  position: fixed; z-index: 500; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom));
-  padding: 14px; color: #7b211c; background: #fff1e8; border: 3px solid #7b211c; box-shadow: 5px 5px 0 rgba(0,0,0,.28);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: start;
+  gap: 10px;
+  margin: -8px 0 18px;
+  padding: 12px 12px 12px 14px;
+  color: #7b211c;
+  background: #fff1e8;
+  border: 2px solid #7b211c;
+  box-shadow: 3px 3px 0 rgba(0,0,0,.2);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.startup-error button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: #7b211c;
+  background: transparent;
+  border: 2px solid currentColor;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .app-shell { min-height: 100dvh; background: radial-gradient(circle at 50% -20%, #40576b, #1d2a3a 48%, #111925 80%); padding-bottom: calc(20px + var(--safe-bottom)); }
