@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#172033" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Born Into — Generational Life Sim</title>
-  <link rel="stylesheet" href="./styles.css?v=9" />
+  <link rel="stylesheet" href="./styles.css?v=10" />
 </head>
 <body>
   <div id="startupError" class="startup-error" hidden></div>
@@ -84,6 +84,11 @@
         <section class="panel-section" data-panel-section="me">
           <div class="section-title"><h3>Needs</h3><button type="button" id="needsToggle" class="text-btn">Details</button></div>
           <div id="needsList" class="bars"></div>
+        </section>
+
+        <section class="panel-section" data-panel-section="me">
+          <div class="section-title"><h3>Traits & interests</h3><span>Growing</span></div>
+          <div id="playerTraits" class="player-traits"></div>
         </section>
 
         <section class="panel-section" data-panel-section="me">
@@ -187,6 +192,6 @@
     </section>
   </div>
 
-  <script type="module" src="./src/main.js?v=9"></script>
+  <script type="module" src="./src/main.js?v=10"></script>
 </body>
 </html>
