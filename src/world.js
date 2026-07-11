@@ -1,4 +1,4 @@
-import { TILE, CANVAS_WIDTH, CANVAS_HEIGHT, SCENE_ENTRY, LOCATION_LABELS } from './config.js';
+import { TILE, CANVAS_WIDTH, CANVAS_HEIGHT, SCENE_ENTRY, LOCATION_LABELS, HOME_ACTIVITY_POINTS } from './config.js';
 import { getFurnitureAnchor, getActiveRooms, hasFurniture } from './state.js';
 export { getActiveRooms } from './state.js';
 import { clamp, seededPhase, stageForAge } from './utils.js';
@@ -28,7 +28,15 @@ export function getSceneEntryPoint(scene) {
 }
 
 export function getAllFamily(state) {
-  return [state.player, ...state.parents, ...state.siblings].filter(Boolean);
+  return [state.player, ...state.parents, ...state.siblings, state.nanny].filter(Boolean);
+}
+
+export function getCaregivers(state) {
+  return [...state.parents, state.nanny].filter(person => person && person.alive !== false);
+}
+
+export function getYoungestChild(state) {
+  return [state.player, ...state.siblings].filter(person => person?.alive !== false).sort((a, b) => a.age - b.age)[0] || null;
 }
 
 export function getPersonById(state, id) {
@@ -68,11 +76,11 @@ export function getSceneObjects(state, scene = state.scene) {
       const labels = {
         parentBed: 'Rest in bed', crib: 'Check the crib', toddlerBed: 'Rest in your toddler bed', childBed: 'Rest in your bed', siblingBed: 'Sibling bed',
         fridge: 'Get something to eat', stove: 'Use the stove', basicTable: 'Sit at the table', diningSet: 'Sit at the dining table',
-        sofa: 'Relax on the sofa', television: 'Watch television', bookshelf: 'Read a book', studyDesk: 'Study at your desk', plant: 'Water the plant', rug: 'Sit on the rug'
+        sofa: 'Relax on the sofa', television: 'Watch television', bookshelf: 'Read a book', studyDesk: 'Study at your desk', plant: 'Water the plant', rug: 'Sit on the rug', toilet: 'Use the bathroom', sink: 'Wash up', shower: 'Take a shower'
       };
       const types = {
         parentBed: 'bed', crib: 'crib', toddlerBed: 'bed', childBed: 'bed', siblingBed: 'bed', fridge: 'fridge', stove: 'stove',
-        basicTable: 'table', diningSet: 'table', sofa: 'sofa', television: 'television', bookshelf: 'book', studyDesk: 'study', plant: 'plant', rug: 'rug'
+        basicTable: 'table', diningSet: 'table', sofa: 'sofa', television: 'television', bookshelf: 'book', studyDesk: 'study', plant: 'plant', rug: 'rug', toilet: 'bathroom', sink: 'bathroom', shower: 'bathroom'
       };
       return { id: item.id, type: types[item.id] || 'furniture', label: labels[item.id] || item.id, x: item.x + item.w / 2, y: item.y + item.h / 2, w: item.w, h: item.h, solid: !['rug', 'plant'].includes(item.id) };
     });
@@ -123,6 +131,91 @@ export function getSceneObjects(state, scene = state.scene) {
     ]
   };
   return [...base, ...(extras[scene] || [])];
+}
+
+export function getActivityPoint(state, person, activityType, goal = {}) {
+  const point = key => {
+    const raw = HOME_ACTIVITY_POINTS[key] || HOME_ACTIVITY_POINTS.livingCenter;
+    const fixed = ['parentBed','crib','childBed','siblingBed','toddlerBed','fridge','stove','studyDesk','bathroom','entry'].includes(key);
+    const phase = seededPhase(person.id || 'person');
+    const spread = fixed ? 0 : 9;
+    return { x: raw.x * TILE + Math.cos(phase) * spread, y: raw.y * TILE + Math.sin(phase) * spread };
+  };
+  if (person.location !== 'home') {
+    const objectType = {
+      school: 'study', homework: 'study', study: 'study', working: 'work', remoteWork: 'work',
+      shopping: 'checkout', furnitureShopping: 'furnitureShop', park: 'play', hobby: 'community',
+      visiting: 'socialize', community: 'community', hospital: 'doctor'
+    }[activityType];
+    const object = getSceneObjects(state, person.location).find(item => item.type === objectType);
+    return object ? findSafePoint(state, person.location, { x: object.x, y: object.y + Math.max(24, object.h / 2 + 14) }) : getSceneEntryPoint(person.location);
+  }
+  if (['feeding', 'changing', 'comforting', 'playing'].includes(activityType) && goal.targetId) {
+    const target = getPersonById(state, goal.targetId);
+    if (target?.location === 'home') return findSafePoint(state, 'home', { x: target.x + 28, y: target.y + 8 });
+  }
+  if (activityType === 'sleeping') {
+    if (person.role === 'Nanny') return point(person.liveIn ? 'sofa' : 'livingCenter');
+    if (person.role === 'Parent') {
+      const parentIndex = state.parents.findIndex(item => item.id === person.id);
+      const base = point('parentBed');
+      return { x: base.x + (parentIndex === 0 ? -15 : 15), y: base.y };
+    }
+    if (person.id === state.player.id && person.stage === 'baby') return point('crib');
+    const siblingIndex = state.siblings.findIndex(item => item.id === person.id);
+    return point(siblingIndex % 2 === 0 ? 'childBed' : 'siblingBed');
+  }
+  if (['breakfast', 'lunch', 'dinner', 'eating'].includes(activityType)) return point('dining');
+  if (activityType === 'shopping') return point('fridge');
+  if (activityType === 'cleaning') {
+    const options = ['kitchen', 'livingCenter', 'bathroom', 'studyDesk'];
+    return point(options[Math.abs(String(person.id).length + Math.floor(state.time.minute / 30)) % options.length]);
+  }
+  if (activityType === 'repairing') return point('kitchen');
+  if (['homework', 'study', 'remoteWork'].includes(activityType)) return point('studyDesk');
+  if (activityType === 'familyTime') return point('livingCenter');
+  if (activityType === 'hobby') {
+    if (goal.hobbyId === 'cooking') return point('stove');
+    if (goal.hobbyId === 'reading' || goal.hobbyId === 'sewing') return point('bookshelf');
+    if (goal.hobbyId === 'television' || goal.hobbyId === 'gaming') return point('sofa');
+    return point('livingCenter');
+  }
+  if (activityType === 'exploring') {
+    const spots = ['nursery', 'livingCenter', 'bookshelf', 'dining', 'bathroom', 'studyDesk'];
+    const index = Math.abs(Math.floor((state.time.minute + String(person.id).length * 17) / 20)) % spots.length;
+    return point(spots[index]);
+  }
+  if (activityType === 'relaxing' || activityType === 'retirement' || activityType === 'waiting') return point('sofa');
+  return point('livingCenter');
+}
+
+const HOME_ROOM_DOORS = {
+  parentBedroom: { x: 4.5 * TILE, y: 7.15 * TILE },
+  childBedroom: { x: 12 * TILE, y: 7.15 * TILE },
+  teenBedroom: { x: 12 * TILE, y: 7.15 * TILE },
+  kitchen: { x: 18.5 * TILE, y: 7.15 * TILE },
+  livingRoom: { x: 5 * TILE, y: 7.85 * TILE },
+  diningRoom: { x: 13 * TILE, y: 7.85 * TILE },
+  bathroom: { x: 19 * TILE, y: 7.85 * TILE }
+};
+
+export function getIndoorWaypoints(state, person, target) {
+  if (person.location !== 'home') return [target];
+  const currentRoom = getHomeRoomAt(state, person.x, person.y);
+  const targetRoom = getHomeRoomAt(state, target.x, target.y);
+  if (!targetRoom || currentRoom?.id === targetRoom.id) return [target];
+  const points = [];
+  if (currentRoom && HOME_ROOM_DOORS[currentRoom.id]) points.push(HOME_ROOM_DOORS[currentRoom.id]);
+  const targetDoor = HOME_ROOM_DOORS[targetRoom.id];
+  if (targetDoor) {
+    const corridorY = 7.5 * TILE;
+    const fromX = points.at(-1)?.x ?? person.x;
+    points.push({ x: fromX, y: corridorY });
+    points.push({ x: targetDoor.x, y: corridorY });
+    points.push(targetDoor);
+  }
+  points.push(target);
+  return points;
 }
 
 export function getCollisionRects(state, scene = state.scene) {

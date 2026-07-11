@@ -2,6 +2,7 @@ import { MAX_TOASTS, ROUTINE_TOAST_COOLDOWN_MS, SPEEDS, DAYS } from './config.js
 import { ACTIVITY_LABELS, ROOM_LABELS, TRAIT_LABELS } from './data.js';
 import { getActiveRooms, getAllFamily, getPersonById, getVisibleResidents, locationLabel } from './world.js';
 import { clamp, dayName, formatAge, formatTime, gameDateLabel, peso, titleCase } from './utils.js';
+import { portraitMarkup } from './art.js';
 
 function el(id) {
   return document.getElementById(id);
@@ -129,6 +130,8 @@ export class UI {
     this.dom.ageLabel.textContent = `Age ${formatAge(player.age)} · Gen ${player.generation}`;
     this.dom.stageBadge.textContent = player.stage;
     this.dom.portrait.dataset.stage = player.stage;
+    this.dom.portrait.classList.add('generated-host');
+    this.dom.portrait.innerHTML = portraitMarkup(player, 'compact-portrait');
     this.dom.dayLabel.textContent = Math.floor(state.time.totalDays) + 1;
     this.dom.timeLabel.textContent = formatTime(state.time.minute);
     this.dom.placeLabel.textContent = locationLabel(state, player.location);
@@ -160,20 +163,34 @@ export class UI {
     this.dom.familyMood.textContent = relationship
       ? relationship.tension > 68 ? 'Tense' : relationship.affection > 68 ? 'Warm' : 'Steady'
       : 'Single-parent home';
-    const members = [...state.parents, ...state.siblings];
-    this.dom.familyList.innerHTML = members.map(person => {
+    const members = [...state.parents, ...state.siblings, state.nanny].filter(Boolean);
+    const familyContext = `<section class="family-context">
+      <div><span>Birth order</span><strong>${state.family.birthOrder?.label || 'Child'}</strong></div>
+      <div><span>Childcare</span><strong>${state.family.childcare?.label || 'Family care'}</strong></div>
+      <p>${state.family.childcare?.reason || ''}</p>
+    </section>`;
+    this.dom.familyList.innerHTML = familyContext + members.map(person => {
       const status = this.simulation.getPersonStatus(person);
-      const role = state.parents.some(parent => parent.id === person.id) ? `${person.job?.label || 'Caregiver'} · ${formatAge(person.age)}` : `Sibling · ${formatAge(person.age)}`;
+      const isParent = state.parents.some(parent => parent.id === person.id);
+      const role = isParent
+        ? `${person.job?.label || 'Caregiver'} · ${formatAge(person.age)}`
+        : person.role === 'Nanny'
+          ? `${person.job?.label || 'Nanny'} · ${formatAge(person.age)}`
+          : `Sibling · ${formatAge(person.age)}`;
       return `<button type="button" class="family-card" data-person-id="${person.id}">
-        <span class="family-avatar">${person.name.charAt(0)}</span>
+        <span class="family-avatar">${portraitMarkup(person, 'mini-portrait')}</span>
         <span class="family-copy"><strong>${person.name}</strong><small>${role}</small></span>
         <span class="family-action">${status}</span>
       </button>`;
-    }).join('') || '<p class="empty-copy">No other family members are currently listed.</p>';
+    }).join('');
+    if (state.family.history?.length) {
+      this.dom.familyList.insertAdjacentHTML('beforeend', `<section class="family-history"><h4>Family history</h4>${state.family.history.slice(0, 5).map(item => `<p>• ${item}</p>`).join('')}</section>`);
+    }
     for (const button of this.dom.familyList.querySelectorAll('[data-person-id]')) {
       button.addEventListener('click', () => this.showProfile(getPersonById(state, button.dataset.personId)));
     }
   }
+
 
   renderObjective() {
     const player = this.state.player;
@@ -214,6 +231,8 @@ export class UI {
       <h4>Rooms</h4><p>${rooms.join(' · ')}</p>
       <h4>Household wishlist</h4>
       ${wishlist.length ? `<ol class="wishlist">${wishlist.map(item => `<li><strong>${item.label}</strong><span>${peso(item.cost)} · ${item.reason || 'Optional upgrade'}</span></li>`).join('')}</ol>` : '<p class="empty-copy">No urgent purchases right now.</p>'}
+      <h4>Childcare arrangement</h4>
+      <p><strong>${state.family.childcare?.label || 'Family care'}</strong><br>${state.family.childcare?.reason || ''}</p>
       <h4>Family planning</h4>
       <p>${state.family.pregnancy ? `A baby is expected around day ${state.family.pregnancy.dueDay + 1}.` : `The parents currently hope for about ${state.family.desiredChildren} child${state.family.desiredChildren === 1 ? '' : 'ren'}.`}</p>
     `;
@@ -261,6 +280,25 @@ export class UI {
     this.dom.cryBtn.textContent = player.crying ? 'Stop crying' : 'Cry';
   }
 
+  showBirthIntro() {
+    const intro = this.state.family.intro;
+    if (!intro || this.state.flags.introShown) return;
+    this.state.flags.introShown = true;
+    const steps = [
+      { eyebrow: 'YOUR BEGINNING', title: intro.birthTitle, body: intro.birthBody },
+      { eyebrow: 'YOUR FAMILY', title: intro.familyTitle, body: intro.familyBody },
+      { eyebrow: 'YOUR HOME', title: intro.homeTitle, body: intro.homeBody }
+    ];
+    const showStep = index => {
+      const step = steps[index];
+      this.showEvent({
+        ...step,
+        choices: [{ label: index === steps.length - 1 ? 'Begin your life' : 'Continue', action: () => { if (index < steps.length - 1) window.setTimeout(() => showStep(index + 1), 0); } }]
+      });
+    };
+    showStep(0);
+  }
+
   showEvent({ eyebrow = 'LIFE EVENT', title, body, choices = [{ label: 'Continue' }] }) {
     this.dom.modalEyebrow.textContent = eyebrow;
     this.dom.modalTitle.textContent = title;
@@ -285,6 +323,7 @@ export class UI {
     const isParent = this.state.parents.some(parent => parent.id === person.id);
     const isPlayer = person.id === this.state.player.id;
     const isResident = person.id.startsWith('resident-');
+    const isNanny = person.role === 'Nanny';
     this.dom.profileTitle.textContent = person.name;
     const traits = person.traits && !Array.isArray(person.traits) ? person.traits : person.traitSeeds || {};
     const traitRows = Object.entries(traits).slice(0, 10).map(([key, value]) => traitMeter(TRAIT_LABELS[key] || titleCase(key), value)).join('');
@@ -295,9 +334,9 @@ export class UI {
     const relationship = isParent && this.state.family.relationship ? `
       <div class="profile-grid"><div><span>Affection</span><strong>${Math.round(this.state.family.relationship.affection)}</strong></div><div><span>Trust</span><strong>${Math.round(this.state.family.relationship.trust)}</strong></div><div><span>Tension</span><strong>${Math.round(this.state.family.relationship.tension)}</strong></div></div>` : '';
     this.dom.profileBody.innerHTML = `
-      <div class="profile-hero"><div class="profile-avatar">${person.name.charAt(0)}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isResident ? 'Town resident' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${locationLabel(this.state, person.location || 'home')}</p></div></div>
+      <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${locationLabel(this.state, person.location || 'home')}</p></div></div>
       <div class="profile-status"><span>Current activity</span><strong>${isResident ? person.job?.label || 'Following a town routine' : this.simulation.getPersonStatus(person)}</strong></div>
-      ${person.job ? `<div class="profile-status"><span>Job</span><strong>${person.job.label}</strong><small>${titleCase(person.job.schedule)} schedule · ${person.job.pay ? `${peso(person.job.pay[0])}–${peso(person.job.pay[1])} per shift` : ''}</small></div>` : ''}
+      ${person.job ? `<div class="profile-status"><span>Job</span><strong>${person.job.label}</strong><small>${titleCase(person.job.schedule)} schedule · ${person.role === 'Nanny' ? `${peso(person.salaryPerDay || 0)} per day` : person.job.pay ? `${peso(person.job.pay[0])}–${peso(person.job.pay[1])} per shift` : ''}</small></div>` : ''}
       ${person.hobbies?.length ? `<div class="profile-status"><span>Hobbies</span><strong>${person.hobbies.map(titleCase).join(' · ')}</strong></div>` : ''}
       ${needs ? `<h4>Needs</h4><div class="bars">${needs}</div>` : ''}
       ${traitRows ? `<h4>Personality</h4><div class="trait-list">${traitRows}</div>` : ''}

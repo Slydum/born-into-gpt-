@@ -79,15 +79,16 @@ function resetMenuPanels() {
   continueBtn.disabled = !hasSave();
 }
 
-function startLife(nextState) {
+function startLife(nextState, isNewLife = false) {
   initializeSystems(nextState);
   gameStarted = true;
   saveGame(state);
   paused = false;
   menuWasPaused = false;
   menuOverlay.classList.add('hidden');
-  notifications.push('Autonomy is on. Your character will follow their routine unless you intervene.', 'important', 'autonomy-intro');
   ui.render();
+  if (isNewLife) window.setTimeout(() => ui.showBirthIntro(), 120);
+  else notifications.push('Autonomy is on. Your character will follow their routine unless you intervene.', 'important', 'autonomy-intro');
 }
 
 function showStartupError(message) {
@@ -107,7 +108,7 @@ continueBtn.addEventListener('click', () => {
     continueBtn.hidden = true;
     return;
   }
-  startLife(loaded);
+  startLife(loaded, false);
 });
 
 document.getElementById('newGameBtn').addEventListener('click', () => {
@@ -133,7 +134,7 @@ newGameForm.addEventListener('submit', event => {
   event.preventDefault();
   clearLegacySaves();
   const nextState = createNewGame(nameInput.value, seedInput.value);
-  startLife(nextState);
+  startLife(nextState, true);
 });
 
 document.getElementById('pauseBtn').addEventListener('click', () => {
@@ -221,7 +222,7 @@ document.addEventListener('visibilitychange', () => {
 function frame(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000 || 0);
   lastFrame = now;
-  if (gameStarted && !paused && menuOverlay.classList.contains('hidden')) {
+  if (gameStarted && !paused && menuOverlay.classList.contains('hidden') && document.getElementById('modalOverlay').classList.contains('hidden')) {
     for (const direction of heldDirections) simulation.movePlayerDirection(direction, dt);
     simulation.update(dt);
   }

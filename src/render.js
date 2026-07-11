@@ -5,6 +5,7 @@ import {
   locationLabel, nearestObject
 } from './world.js';
 import { clamp, formatTime, seededPhase, titleCase } from './utils.js';
+import { drawTopDownCharacter } from './art.js';
 
 const ROOM_COLORS = {
   parentBedroom: ['#dfcda8', '#e7d7b6'],
@@ -12,7 +13,8 @@ const ROOM_COLORS = {
   livingRoom: ['#d6c6a3', '#dfcfad'],
   diningRoom: ['#d2c09a', '#dcc9a7'],
   childBedroom: ['#c8d7d1', '#d5e2dd'],
-  teenBedroom: ['#c4d1dc', '#d1dde5']
+  teenBedroom: ['#c4d1dc', '#d1dde5'],
+  bathroom: ['#d7e5e4', '#e3efee']
 };
 
 const SCENE_PALETTES = {
@@ -72,6 +74,7 @@ export class Renderer {
       ctx.fillText(room.label.toUpperCase(), room.x * TILE + 8, room.y * TILE + 16);
     }
 
+    this.drawInteriorDoorGaps();
     this.drawDoorOpening(11.5 * TILE, 17 * TILE, 'bottom');
     this.drawHomeWindows();
     this.drawFurniture();
@@ -86,6 +89,17 @@ export class Renderer {
         ctx.fillRect((x + column) * TILE, (y + row) * TILE, TILE, TILE);
       }
     }
+  }
+
+  drawInteriorDoorGaps() {
+    const ctx = this.ctx;
+    const topDoors = [4.5, 12, 18.5];
+    const bottomDoors = [5, 13, 19];
+    ctx.fillStyle = '#eadbb7';
+    for (const x of topDoors) ctx.fillRect(x * TILE - 15, 7 * TILE - 8, 30, 16);
+    for (const x of bottomDoors) ctx.fillRect(x * TILE - 15, 8 * TILE - 8, 30, 16);
+    ctx.fillStyle = '#d9caab';
+    ctx.fillRect(TILE, 7.25 * TILE, 20 * TILE, 0.5 * TILE);
   }
 
   drawHomeWindows() {
@@ -223,6 +237,20 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(x + w / 2, y + h * 0.4, w * 0.35, 0, Math.PI * 2);
         ctx.fill();
+        break;
+      case 'toilet':
+        ctx.fillStyle = '#eef2ef';
+        ctx.fillRect(x + w * 0.15, y + h * 0.15, w * 0.7, h * 0.72);
+        ctx.strokeStyle = '#9ca9a5'; ctx.lineWidth = 2; ctx.strokeRect(x + w * 0.15, y + h * 0.15, w * 0.7, h * 0.72);
+        break;
+      case 'sink':
+        ctx.fillStyle = '#edf3f0'; ctx.fillRect(x, y + h * 0.2, w, h * 0.65);
+        ctx.fillStyle = '#9aa9a5'; ctx.fillRect(x + w * 0.45, y, 3, h * 0.3);
+        break;
+      case 'shower':
+        ctx.fillStyle = 'rgba(169,210,216,.45)'; ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = '#8da6aa'; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = '#75898c'; ctx.beginPath(); ctx.arc(x + w * 0.75, y + h * 0.2, 6, 0, Math.PI * 2); ctx.fill();
         break;
       default:
         ctx.fillStyle = '#8e735c';
@@ -385,19 +413,16 @@ export class Renderer {
   }
 
   drawPeople(scene) {
-    const family = [this.state.player, ...this.state.parents, ...this.state.siblings]
-      .filter(person => person.location === scene && !person.carriedBy && person.alive !== false);
+    const family = [this.state.player, ...this.state.parents, ...this.state.siblings, this.state.nanny]
+      .filter(person => person && person.location === scene && !person.carriedBy && person.alive !== false);
     for (const person of family) {
       const isPlayer = person.id === this.state.player.id;
-      const color = isPlayer ? '#d69a55' : this.state.parents.some(parent => parent.id === person.id) ? '#5f8797' : '#9c6f91';
-      this.drawPerson(person, color, isPlayer, true);
+      this.drawPerson(person, isPlayer, true);
     }
-    for (const resident of getVisibleResidents(this.state, scene)) {
-      this.drawPerson(resident, this.residentColor(resident), false, false);
-    }
+    for (const resident of getVisibleResidents(this.state, scene)) this.drawPerson(resident, false, false);
     if (this.state.player.carriedBy) {
-      const parent = this.state.parents.find(item => item.id === this.state.player.carriedBy);
-      if (parent && parent.location === scene) this.drawCarriedBaby(parent);
+      const carrier = [this.state.nanny, ...this.state.parents].find(item => item?.id === this.state.player.carriedBy);
+      if (carrier && carrier.location === scene) this.drawCarriedBaby(carrier);
     }
   }
 
@@ -408,38 +433,25 @@ export class Renderer {
     return '#6c9278';
   }
 
-  drawPerson(person, shirtColor, isPlayer, clickable) {
-    const ctx = this.ctx;
-    const bob = person.moving ? Math.sin(this.animationClock * 10 + seededPhase(person.id)) * 2 : 0;
-    const x = Math.round(person.x);
-    const y = Math.round(person.y + bob);
-    const scale = person.stage === 'baby' ? 0.65 : person.stage === 'toddler' ? 0.78 : person.stage === 'child' ? 0.88 : 1;
-    const w = 20 * scale;
-    const h = 34 * scale;
-    ctx.fillStyle = 'rgba(23,32,51,.16)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + h / 2, 13 * scale, 5 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#4b342d';
-    ctx.fillRect(x - w / 2, y - h / 2, w, 9 * scale);
-    ctx.fillStyle = '#d9a472';
-    ctx.fillRect(x - w * 0.38, y - h / 2 + 7 * scale, w * 0.76, 12 * scale);
-    ctx.fillStyle = '#172033';
-    ctx.fillRect(x - 5 * scale, y - h / 2 + 11 * scale, 3 * scale, 3 * scale);
-    ctx.fillRect(x + 3 * scale, y - h / 2 + 11 * scale, 3 * scale, 3 * scale);
-    ctx.fillStyle = shirtColor;
-    ctx.fillRect(x - w * 0.42, y - h / 2 + 19 * scale, w * 0.84, 12 * scale);
-    ctx.fillStyle = '#26384a';
-    ctx.fillRect(x - w * 0.33, y + h / 2 - 5 * scale, 5 * scale, 8 * scale);
-    ctx.fillRect(x + w * 0.08, y + h / 2 - 5 * scale, 5 * scale, 8 * scale);
-    if (isPlayer) {
-      ctx.strokeStyle = '#f5cf73';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x - w / 2 - 4, y - h / 2 - 4, w + 8, h + 8);
-    }
-    this.drawNameTag(person, x, y - h / 2 - 8, isPlayer);
-    this.personHitboxes.push({ id: person.id, x: x - 18, y: y - 28, w: 36, h: 48, person, clickable: clickable || !person.id.startsWith('resident-') });
+  drawPerson(person, isPlayer, clickable) {
+    if (!person.appearance) person.appearance = { skin: '#d9a472', hair: '#4b342d', top: this.residentColor(person), bottom: '#26384a', hairStyle: 'short', accessory: 'none' };
+    const sittingActivities = new Set(['breakfast','lunch','dinner','eating','familyTime','relaxing','retirement','hobby','homework','study','childcare','playing']);
+    const pose = person.activity?.type === 'sleeping' ? 'sleeping' : sittingActivities.has(person.activity?.type) ? 'sitting' : 'standing';
+    const box = drawTopDownCharacter(this.ctx, person, this.animationClock, { highlight: isPlayer, pose });
+    if (person.activity?.type === 'cooking' || (person.activity?.type === 'hobby' && person.activity?.hobbyId === 'cooking')) this.drawActivityBubble(person, '🍳');
+    if (person.activity?.type === 'working' || person.activity?.type === 'remoteWork') this.drawActivityBubble(person, '▣');
+    if (person.activity?.type === 'school' || person.activity?.type === 'homework') this.drawActivityBubble(person, '✎');
+    this.drawNameTag(person, box.x, box.y - box.height / 2 - 5, isPlayer);
+    this.personHitboxes.push({ id: person.id, x: box.x - box.width / 2, y: box.y - box.height / 2, w: box.width, h: box.height, person, clickable: clickable || !person.id.startsWith('resident-') });
   }
+
+  drawActivityBubble(person, symbol) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(247,242,231,.94)';
+    ctx.beginPath(); ctx.arc(person.x + 15, person.y - 28, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#172033'; ctx.font = '11px system-ui, sans-serif'; ctx.fillText(symbol, person.x + 10, person.y - 24);
+  }
+
 
   drawNameTag(person, x, y, isPlayer) {
     const ctx = this.ctx;

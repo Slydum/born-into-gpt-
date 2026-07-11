@@ -3,9 +3,9 @@ export const COLS = 22;
 export const ROWS = 18;
 export const CANVAS_WIDTH = COLS * TILE;
 export const CANVAS_HEIGHT = ROWS * TILE;
-export const SAVE_KEY = 'born-into-save-v4';
-export const LEGACY_SAVE_KEYS = ['born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
-export const SAVE_VERSION = 4;
+export const SAVE_KEY = 'born-into-save-v5';
+export const LEGACY_SAVE_KEYS = ['born-into-save-v4', 'born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
+export const SAVE_VERSION = 5;
 export const SPEEDS = [1, 3, 8];
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const WEEKDAY_COUNT = 5;
@@ -119,38 +119,63 @@ export const HOUSE_PURCHASES = [
 
 export const HOME_ANCHORS = {
   parentBedroom: {
-    bed: { x: 3.4, y: 3.4, w: 2.7, h: 1.2, facing: 'down' },
-    crib: { x: 10.1, y: 3.5, w: 1.2, h: 1.2, facing: 'down' },
-    toddlerBed: { x: 7.1, y: 3.4, w: 2.1, h: 1.1, facing: 'down' },
-    dresser: { x: 2.2, y: 6.0, w: 1.1, h: 1.6, facing: 'right' }
-  },
-  kitchen: {
-    fridge: { x: 18.8, y: 3.1, w: 1.0, h: 1.2, facing: 'left' },
-    stove: { x: 20.0, y: 5.0, w: 1.0, h: 1.0, facing: 'left' },
-    counter: { x: 16.2, y: 2.2, w: 2.0, h: 0.8, facing: 'down' }
-  },
-  diningRoom: {
-    diningSet: { x: 17.0, y: 11.2, w: 3.1, h: 2.0, facing: 'down' }
-  },
-  livingRoom: {
-    sofa: { x: 12.0, y: 13.2, w: 3.1, h: 1.3, facing: 'up' },
-    television: { x: 12.2, y: 9.8, w: 2.0, h: 0.8, facing: 'down' },
-    rug: { x: 11.6, y: 11.2, w: 4.0, h: 2.7, facing: 'down' },
-    bookshelf: { x: 2.2, y: 10.4, w: 1.1, h: 2.2, facing: 'right' },
-    plant: { x: 15.7, y: 15.0, w: 0.8, h: 0.8, facing: 'up' }
+    bed: { x: 1.7, y: 2.1, w: 2.8, h: 1.4, facing: 'down' },
+    crib: { x: 5.8, y: 2.1, w: 1.2, h: 1.3, facing: 'down' },
+    toddlerBed: { x: 5.0, y: 4.4, w: 2.2, h: 1.1, facing: 'up' },
+    dresser: { x: 1.7, y: 5.0, w: 1.1, h: 1.2, facing: 'right' }
   },
   childBedroom: {
-    childBed: { x: 3.2, y: 12.0, w: 2.5, h: 1.2, facing: 'down' },
-    siblingBed: { x: 3.2, y: 15.0, w: 2.5, h: 1.2, facing: 'up' },
-    studyDesk: { x: 8.0, y: 12.0, w: 2.0, h: 1.2, facing: 'down' },
-    dresser: { x: 8.7, y: 15.0, w: 1.2, h: 1.4, facing: 'left' }
+    childBed: { x: 9.5, y: 2.1, w: 2.2, h: 1.1, facing: 'down' },
+    siblingBed: { x: 9.5, y: 4.6, w: 2.2, h: 1.1, facing: 'up' },
+    studyDesk: { x: 13.1, y: 2.2, w: 1.5, h: 1.0, facing: 'down' },
+    dresser: { x: 13.5, y: 4.7, w: 1.0, h: 1.2, facing: 'left' }
   },
   teenBedroom: {
-    childBed: { x: 3.2, y: 12.2, w: 2.6, h: 1.2, facing: 'down' },
-    studyDesk: { x: 8.0, y: 12.0, w: 2.0, h: 1.2, facing: 'down' },
-    bookshelf: { x: 9.0, y: 15.0, w: 1.0, h: 1.7, facing: 'left' }
+    childBed: { x: 9.4, y: 2.1, w: 2.4, h: 1.2, facing: 'down' },
+    studyDesk: { x: 13.0, y: 2.1, w: 1.7, h: 1.1, facing: 'down' },
+    bookshelf: { x: 13.7, y: 4.6, w: 0.8, h: 1.5, facing: 'left' }
+  },
+  kitchen: {
+    fridge: { x: 19.7, y: 2.0, w: 0.9, h: 1.3, facing: 'left' },
+    stove: { x: 19.7, y: 4.1, w: 0.9, h: 1.0, facing: 'left' },
+    counter: { x: 16.6, y: 1.7, w: 2.2, h: 0.75, facing: 'down' }
+  },
+  livingRoom: {
+    sofa: { x: 2.1, y: 13.4, w: 3.0, h: 1.2, facing: 'up' },
+    television: { x: 3.0, y: 9.2, w: 2.0, h: 0.75, facing: 'down' },
+    rug: { x: 2.2, y: 10.6, w: 4.5, h: 2.2, facing: 'down' },
+    bookshelf: { x: 7.3, y: 9.5, w: 0.9, h: 2.0, facing: 'left' },
+    plant: { x: 7.5, y: 15.4, w: 0.7, h: 0.7, facing: 'up' }
+  },
+  diningRoom: {
+    diningSet: { x: 11.5, y: 10.5, w: 3.2, h: 2.0, facing: 'down' }
+  },
+  bathroom: {
+    toilet: { x: 17.7, y: 9.5, w: 0.8, h: 1.0, facing: 'down' },
+    sink: { x: 19.6, y: 9.5, w: 0.9, h: 0.8, facing: 'down' },
+    shower: { x: 17.6, y: 13.3, w: 2.6, h: 2.5, facing: 'down' }
   }
 };
+
+export const HOME_ACTIVITY_POINTS = {
+  parentBed: { x: 4.8, y: 3.1 },
+  crib: { x: 5.4, y: 3.3 },
+  childBed: { x: 12.0, y: 2.8 },
+  siblingBed: { x: 12.0, y: 5.0 },
+  toddlerBed: { x: 4.7, y: 5.1 },
+  dining: { x: 14.8, y: 11.5 },
+  fridge: { x: 18.9, y: 2.7 },
+  stove: { x: 18.9, y: 4.6 },
+  sofa: { x: 3.7, y: 12.8 },
+  television: { x: 4.0, y: 10.4 },
+  bookshelf: { x: 6.8, y: 10.7 },
+  studyDesk: { x: 12.8, y: 3.7 },
+  bathroom: { x: 18.8, y: 12.0 },
+  nursery: { x: 6.1, y: 3.8 },
+  livingCenter: { x: 5.2, y: 13.2 },
+  entry: { x: 11.5, y: 16.0 }
+};
+
 
 export const NEED_DECAY = {
   baby: { satiety: 0.55, energy: 0.14, hygiene: 0.14, comfort: 0.18 },
