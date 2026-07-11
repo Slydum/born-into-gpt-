@@ -1,4 +1,4 @@
-# Born Into V7.1.2 — Return Home Hotfix
+# Born Into V7.2 — Character Sprite Update
 
 A mobile-first autonomous life simulation. V7.1 focuses on keeping every system consistent when people age, die, move away, visit family, replace furniture, and begin adult life.
 
