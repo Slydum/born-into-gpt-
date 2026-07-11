@@ -5,9 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1d2636" />
   <title>Born Into — Generational Life Sim</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <script>
+    window.__BORN_INTO_READY__ = false;
+    window.__showBornIntoError = function (message) {
+      window.addEventListener('DOMContentLoaded', function () {
+        var box = document.getElementById('startupError');
+        if (!box) return;
+        box.textContent = message;
+        box.hidden = false;
+      }, { once: true });
+    };
+    window.addEventListener('error', function (event) {
+      window.__showBornIntoError('The game script hit an error: ' + (event.message || 'unknown error'));
+    });
+    setTimeout(function () {
+      if (!window.__BORN_INTO_READY__) {
+        window.__showBornIntoError('The game JavaScript did not start. Confirm that src/main.js exists in the GitHub repository with the same lowercase spelling.');
+      }
+    }, 2500);
+  </script>
+  <link rel="stylesheet" href="./styles.css?v=4" />
 </head>
 <body>
+  <div id="startupError" class="startup-error" hidden></div>
   <main id="app">
     <header class="topbar">
       <div class="brand-lockup">
@@ -18,10 +38,10 @@
         </div>
       </div>
       <div class="top-actions">
-        <button id="pauseBtn" class="icon-btn" title="Pause">Ⅱ</button>
-        <button id="speedBtn" class="pill-btn" title="Change speed">1×</button>
-        <button id="saveBtn" class="pill-btn">Save</button>
-        <button id="menuBtn" class="icon-btn" title="Menu">☰</button>
+        <button type="button" id="pauseBtn" class="icon-btn" title="Pause">Ⅱ</button>
+        <button type="button" id="speedBtn" class="pill-btn" title="Change speed">1×</button>
+        <button type="button" id="saveBtn" class="pill-btn">Save</button>
+        <button type="button" id="menuBtn" class="icon-btn" title="Menu">☰</button>
       </div>
     </header>
 
@@ -50,7 +70,7 @@
         </section>
 
         <section class="panel-section">
-          <div class="section-title"><h3>Needs</h3><button id="needsToggle" class="text-btn">Details</button></div>
+          <div class="section-title"><h3>Needs</h3><button type="button" id="needsToggle" class="text-btn">Details</button></div>
           <div id="needsList" class="bars"></div>
         </section>
 
@@ -65,17 +85,17 @@
         </section>
 
         <section class="panel-section log-section">
-          <div class="section-title"><h3>Memory</h3><button id="clearLogBtn" class="text-btn">Clear</button></div>
+          <div class="section-title"><h3>Memory</h3><button type="button" id="clearLogBtn" class="text-btn">Clear</button></div>
           <div id="eventLog" class="event-log"></div>
         </section>
 
         <details class="dev-tools">
           <summary>Test controls</summary>
           <div class="dev-grid">
-            <button id="ageBtn">Age +1 year</button>
-            <button id="eventBtn">Trigger event</button>
-            <button id="childBtn">Add child</button>
-            <button id="deathBtn">Force death</button>
+            <button type="button" id="ageBtn">Age +1 year</button>
+            <button type="button" id="eventBtn">Trigger event</button>
+            <button type="button" id="childBtn">Add child</button>
+            <button type="button" id="deathBtn">Force death</button>
           </div>
         </details>
       </aside>
@@ -83,13 +103,13 @@
 
     <section class="controls" aria-label="Game controls">
       <div class="dpad" aria-label="Touch movement controls">
-        <button data-dir="up">▲</button>
-        <button data-dir="left">◀</button>
-        <button data-dir="down">▼</button>
-        <button data-dir="right">▶</button>
+        <button type="button" data-dir="up">▲</button>
+        <button type="button" data-dir="left">◀</button>
+        <button type="button" data-dir="down">▼</button>
+        <button type="button" data-dir="right">▶</button>
       </div>
-      <button id="actionBtn" class="action-button">Interact</button>
-      <button id="cryBtn" class="cry-button">Cry</button>
+      <button type="button" id="actionBtn" class="action-button">Interact</button>
+      <button type="button" id="cryBtn" class="cry-button">Cry</button>
       <div class="desktop-help"><kbd>WASD</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>C</kbd> Cry &nbsp; <kbd>Space</kbd> Pause</div>
     </section>
   </main>
@@ -106,9 +126,9 @@
         <h2>Born Into</h2>
         <p class="menu-intro">You do not choose your beginning. Live, grow, form a family, and continue through the lives of your children.</p>
         <div id="mainMenuButtons" class="menu-buttons">
-          <button id="continueBtn" class="primary-btn">Continue life</button>
-          <button id="newGameBtn" class="secondary-btn">Begin a new life</button>
-          <button id="howBtn" class="ghost-btn">How to play</button>
+          <button type="button" id="continueBtn" class="primary-btn">Continue life</button>
+          <button type="button" id="newGameBtn" class="secondary-btn">Begin a new life</button>
+          <button type="button" id="howBtn" class="ghost-btn">How to play</button>
         </div>
         <form id="newGameForm" class="new-game-form hidden">
           <label>Character name<input id="nameInput" maxlength="18" placeholder="Random name" /></label>
@@ -119,7 +139,7 @@
           <p><strong>Baby:</strong> Cry when your needs are low. Your caregivers may respond—or may be too overwhelmed.</p>
           <p><strong>Toddler onward:</strong> Explore with WASD or the touch controls. Interact with nearby objects using E.</p>
           <p><strong>Life:</strong> Time changes your stage, relationships, opportunities, and risks. Save data stays in your browser.</p>
-          <button id="howBackBtn" class="ghost-btn">Back</button>
+          <button type="button" id="howBackBtn" class="ghost-btn">Back</button>
         </div>
       </div>
     </div>
@@ -134,6 +154,6 @@
     </div>
   </div>
 
-  <script src="./src/main.js"></script>
+  <script defer src="./src/main.js?v=4"></script>
 </body>
 </html>

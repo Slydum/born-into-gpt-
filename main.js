@@ -999,6 +999,20 @@ function openMainMenu(){
 }
 function closeMenu(){dom.menuOverlay.classList.add('hidden');dom.menuOverlay.classList.remove('visible');lastTime=performance.now();}
 
+function bindPress(element, handler) {
+  if (!element) return;
+  let lastTouch = 0;
+  element.addEventListener('touchend', event => {
+    event.preventDefault();
+    lastTouch = Date.now();
+    handler(event);
+  }, { passive: false });
+  element.addEventListener('click', event => {
+    if (Date.now() - lastTouch < 600) return;
+    handler(event);
+  });
+}
+
 function bindEvents(){
   window.addEventListener('keydown',e=>{
     const k=e.key.toLowerCase();
@@ -1012,30 +1026,33 @@ function bindEvents(){
     for(const ev of ['pointerdown','touchstart'])btn.addEventListener(ev,e=>{e.preventDefault();touchDirs.add(dir);});
     for(const ev of ['pointerup','pointercancel','pointerleave','touchend'])btn.addEventListener(ev,e=>{e.preventDefault();touchDirs.delete(dir);});
   });
-  dom.actionBtn.addEventListener('click',interact);dom.cryBtn.addEventListener('click',cry);
-  dom.pauseBtn.addEventListener('click',togglePause);
-  dom.speedBtn.addEventListener('click',()=>{speedIndex=(speedIndex+1)%SPEEDS.length;dom.speedBtn.textContent=`${SPEEDS[speedIndex]}×`;toast(`Simulation speed ${SPEEDS[speedIndex]}×`);});
-  dom.saveBtn.addEventListener('click',()=>saveGame());
-  dom.menuBtn.addEventListener('click',()=>{saveGame(false);openMainMenu();});
-  dom.continueBtn.addEventListener('click',()=>{if(!loadGame())openNewGame();});
-  dom.newGameBtn.addEventListener('click',openNewGame);
-  dom.backBtn.addEventListener('click',openMainMenu);
-  dom.howBtn.addEventListener('click',()=>{dom.mainMenuButtons.classList.add('hidden');dom.howPanel.classList.remove('hidden');});
-  dom.howBackBtn.addEventListener('click',openMainMenu);
-  dom.randomSeedBtn.addEventListener('click',()=>dom.seedInput.value=Math.random().toString(36).slice(2,10).toUpperCase());
+  bindPress(dom.actionBtn, interact); bindPress(dom.cryBtn, cry);
+  bindPress(dom.pauseBtn, togglePause);
+  bindPress(dom.speedBtn, ()=>{speedIndex=(speedIndex+1)%SPEEDS.length;dom.speedBtn.textContent=`${SPEEDS[speedIndex]}×`;toast(`Simulation speed ${SPEEDS[speedIndex]}×`);});
+  bindPress(dom.saveBtn, ()=>saveGame());
+  bindPress(dom.menuBtn, ()=>{saveGame(false);openMainMenu();});
+  bindPress(dom.continueBtn, ()=>{if(!loadGame())openNewGame();});
+  bindPress(dom.newGameBtn, openNewGame);
+  bindPress(dom.backBtn, openMainMenu);
+  bindPress(dom.howBtn, ()=>{dom.mainMenuButtons.classList.add('hidden');dom.howPanel.classList.remove('hidden');});
+  bindPress(dom.howBackBtn, openMainMenu);
+  bindPress(dom.randomSeedBtn, ()=>dom.seedInput.value=Math.random().toString(36).slice(2,10).toUpperCase());
   dom.newGameForm.addEventListener('submit',e=>{
     e.preventDefault();
     const seed=dom.seedInput.value.trim()||Math.random().toString(36).slice(2,11);
     state=createNewState(dom.nameInput.value,seed);paused=false;speedIndex=0;dom.speedBtn.textContent='1×';closeMenu();saveGame(false);updateUI(true);showModal('A NEW LIFE','You were born here',`${state.player.name} begins life in ${state.world.name}. Your household is ${state.household.label.toLowerCase()}, and your caregivers will make choices of their own.`,[{label:'Open your eyes',action:()=>{}}]);
   });
-  dom.clearLogBtn.addEventListener('click',()=>{if(state)state.log=[];updateUI(true);});
-  dom.ageBtn.addEventListener('click',()=>{if(!state)return;const old=state.player.stage;state.player.age+=1;const next=stageForAge(state.player.age);if(next!==old)changeStage(next,old);updateUI(true);});
-  dom.eventBtn.addEventListener('click',()=>triggerRandomEvent(true));
-  dom.childBtn.addEventListener('click',()=>createChild('Added through test controls.'));
-  dom.deathBtn.addEventListener('click',()=>die('a test of the generational system'));
+  bindPress(dom.clearLogBtn, ()=>{if(state)state.log=[];updateUI(true);});
+  bindPress(dom.ageBtn, ()=>{if(!state)return;const old=state.player.stage;state.player.age+=1;const next=stageForAge(state.player.age);if(next!==old)changeStage(next,old);updateUI(true);});
+  bindPress(dom.eventBtn, ()=>triggerRandomEvent(true));
+  bindPress(dom.childBtn, ()=>createChild('Added through test controls.'));
+  bindPress(dom.deathBtn, ()=>die('a test of the generational system'));
 }
 function togglePause(){if(!state)return;paused=!paused;dom.pauseBtn.textContent=paused?'▶':'Ⅱ';toast(paused?'Paused':'Life continues');}
 
 bindEvents();
 openMainMenu();
+window.__BORN_INTO_READY__ = true;
+const startupError = document.querySelector('#startupError');
+if (startupError) startupError.hidden = true;
 requestAnimationFrame(loop);
