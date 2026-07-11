@@ -127,7 +127,7 @@ export function getDayIndex(totalDays) {
 
 export function gameDateLabel(state) {
   const week = getWeekIndex(state.time.totalDays) + 1;
-  return `${dayName(state.time.totalDays)} · Week ${week}`;
+  return `${dayName(state.time.totalDays).slice(0, 3)} · D${Math.floor(state.time.totalDays)+1} · W${week} · ${formatTime(state.time.minute)}`;
 }
 
 export function compactList(items, max = 3) {

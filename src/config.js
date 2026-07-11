@@ -3,9 +3,9 @@ export const COLS = 22;
 export const ROWS = 18;
 export const CANVAS_WIDTH = COLS * TILE;
 export const CANVAS_HEIGHT = ROWS * TILE;
-export const SAVE_KEY = 'born-into-save-v5';
-export const LEGACY_SAVE_KEYS = ['born-into-save-v4', 'born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
-export const SAVE_VERSION = 5;
+export const SAVE_KEY = 'born-into-save-v6';
+export const LEGACY_SAVE_KEYS = ['born-into-save-v5', 'born-into-save-v4', 'born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
+export const SAVE_VERSION = 6;
 export const SPEEDS = [1, 3, 8];
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const WEEKDAY_COUNT = 5;
@@ -87,18 +87,18 @@ export const JOBS = [
 ];
 
 export const HOBBIES = [
-  { id: 'reading', label: 'Reading', location: 'home', mood: 12, energy: -2, cost: 0, trait: 'patience' },
-  { id: 'gardening', label: 'Gardening', location: 'home', mood: 14, energy: -5, cost: 5, trait: 'responsibility' },
-  { id: 'gaming', label: 'Gaming', location: 'home', mood: 15, energy: -2, cost: 0, trait: 'impulsiveness' },
-  { id: 'exercise', label: 'Exercise', location: 'park', mood: 15, energy: -10, cost: 0, trait: 'workEthic' },
-  { id: 'painting', label: 'Painting', location: 'community', mood: 18, energy: -4, cost: 12, trait: 'warmth' },
-  { id: 'music', label: 'Music practice', location: 'community', mood: 17, energy: -4, cost: 6, trait: 'sociability' },
-  { id: 'cooking', label: 'Cooking', location: 'home', mood: 12, energy: -6, cost: 8, trait: 'warmth' },
-  { id: 'socializing', label: 'Visiting friends', location: 'community', mood: 20, energy: -5, cost: 10, trait: 'sociability' },
-  { id: 'walking', label: 'Walking in the park', location: 'park', mood: 13, energy: -7, cost: 0, trait: 'patience' },
-  { id: 'volunteering', label: 'Volunteering', location: 'community', mood: 14, energy: -8, cost: 0, trait: 'responsibility' },
-  { id: 'television', label: 'Watching television', location: 'home', mood: 10, energy: 1, cost: 0, trait: 'impulsiveness' },
-  { id: 'sewing', label: 'Sewing', location: 'home', mood: 13, energy: -3, cost: 4, trait: 'patience' }
+  { id: 'reading', label: 'Reading', location: 'home', mood: 12, energy: -2, cost: 0, trait: 'patience', equipment: 'bookshelf' },
+  { id: 'gardening', label: 'Gardening', location: 'home', mood: 14, energy: -5, cost: 5, trait: 'responsibility', equipment: 'gardenKit' },
+  { id: 'gaming', label: 'Gaming', location: 'home', mood: 15, energy: -2, cost: 0, trait: 'impulsiveness', equipment: 'gameConsole' },
+  { id: 'exercise', label: 'Exercise', location: 'home', mood: 15, energy: -10, cost: 0, trait: 'workEthic', equipment: 'exerciseMat' },
+  { id: 'painting', label: 'Painting', location: 'home', mood: 18, energy: -4, cost: 12, trait: 'creativity', equipment: 'easel' },
+  { id: 'music', label: 'Music practice', location: 'home', mood: 17, energy: -4, cost: 6, trait: 'sociability', equipment: 'keyboard' },
+  { id: 'cooking', label: 'Cooking', location: 'home', mood: 12, energy: -6, cost: 8, trait: 'warmth', equipment: 'stove' },
+  { id: 'socializing', label: 'Visiting friends', location: 'community', mood: 20, energy: -5, cost: 10, trait: 'sociability', equipment: null },
+  { id: 'walking', label: 'Walking in the park', location: 'park', mood: 13, energy: -7, cost: 0, trait: 'patience', equipment: null },
+  { id: 'volunteering', label: 'Volunteering', location: 'community', mood: 14, energy: -8, cost: 0, trait: 'responsibility', equipment: null },
+  { id: 'television', label: 'Watching television', location: 'home', mood: 10, energy: 1, cost: 0, trait: 'impulsiveness', equipment: 'television' },
+  { id: 'sewing', label: 'Sewing', location: 'home', mood: 13, energy: -3, cost: 4, trait: 'patience', equipment: 'sewingKit' }
 ];
 
 export const HOUSE_PURCHASES = [
@@ -106,15 +106,24 @@ export const HOUSE_PURCHASES = [
   { id: 'toddlerBed', label: 'toddler bed', cost: 170, priority: 100, requiredStage: 'toddler', room: 'parentBedroom' },
   { id: 'childBed', label: 'child bed', cost: 260, priority: 95, requiredStage: 'child', room: 'childBedroom' },
   { id: 'studyDesk', label: 'study desk', cost: 220, priority: 82, requiredStage: 'child', room: 'childBedroom' },
-  { id: 'teenBedroom', label: 'teen bedroom extension', cost: 1350, priority: 110, requiredStage: 'teen', room: 'teenBedroom', constructionDays: 3 },
+  { id: 'teenBedroom', label: 'teen bedroom extension', cost: 1350, priority: 110, requiredStage: 'teen', room: 'teenBedroom', constructionDays: 4 },
   { id: 'siblingBed', label: 'sibling bed', cost: 250, priority: 90, requiredStage: 'sibling', room: 'childBedroom' },
   { id: 'sofa', label: 'sofa', cost: 320, priority: 38, room: 'livingRoom' },
   { id: 'rug', label: 'rug', cost: 95, priority: 24, room: 'livingRoom' },
   { id: 'television', label: 'television', cost: 410, priority: 20, room: 'livingRoom' },
   { id: 'bookshelf', label: 'bookshelf', cost: 180, priority: 35, room: 'livingRoom' },
   { id: 'plant', label: 'house plant', cost: 45, priority: 12, room: 'livingRoom' },
-  { id: 'diningSet', label: 'dining set', cost: 360, priority: 45, room: 'diningRoom' },
-  { id: 'paint', label: 'fresh wall paint', cost: 230, priority: 30, room: 'wholeHouse' }
+  { id: 'diningSet', label: 'dining set', cost: 360, priority: 65, room: 'diningRoom' },
+  { id: 'paint', label: 'fresh wall paint', cost: 230, priority: 30, room: 'wholeHouse' },
+  { id: 'washingMachine', label: 'washing machine', cost: 520, priority: 60, room: 'bathroom' },
+  { id: 'dishwasher', label: 'dishwasher', cost: 610, priority: 42, room: 'kitchen' },
+  { id: 'exerciseMat', label: 'exercise mat', cost: 90, priority: 26, room: 'livingRoom', hobby: 'exercise' },
+  { id: 'dumbbells', label: 'dumbbells', cost: 220, priority: 22, room: 'livingRoom', hobby: 'exercise' },
+  { id: 'easel', label: 'painting easel and supplies', cost: 260, priority: 30, room: 'livingRoom', hobby: 'painting' },
+  { id: 'keyboard', label: 'music keyboard', cost: 480, priority: 22, room: 'livingRoom', hobby: 'music' },
+  { id: 'sewingKit', label: 'sewing kit', cost: 170, priority: 22, room: 'livingRoom', hobby: 'sewing' },
+  { id: 'gardenKit', label: 'gardening kit', cost: 150, priority: 20, room: 'livingRoom', hobby: 'gardening' },
+  { id: 'gameConsole', label: 'game console', cost: 720, priority: 15, room: 'livingRoom', hobby: 'gaming' }
 ];
 
 export const HOME_ANCHORS = {

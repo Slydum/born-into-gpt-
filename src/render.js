@@ -51,6 +51,7 @@ export class Renderer {
     else if (scene === 'town') this.drawTown();
     else this.drawInterior(scene);
     this.drawPeople(scene);
+    this.drawSpeechBubbles(scene);
     this.drawSceneLabels(scene);
     this.drawInteraction();
   }
@@ -78,6 +79,7 @@ export class Renderer {
     this.drawDoorOpening(11.5 * TILE, 17 * TILE, 'bottom');
     this.drawHomeWindows();
     this.drawFurniture();
+    this.drawHouseholdLife();
     this.drawConstruction();
   }
 
@@ -93,22 +95,29 @@ export class Renderer {
 
   drawInteriorDoorGaps() {
     const ctx = this.ctx;
-    const topDoors = [4.5, 12, 18.5];
-    const bottomDoors = [5, 13, 19];
     ctx.fillStyle = '#eadbb7';
-    for (const x of topDoors) ctx.fillRect(x * TILE - 15, 7 * TILE - 8, 30, 16);
-    for (const x of bottomDoors) ctx.fillRect(x * TILE - 15, 8 * TILE - 8, 30, 16);
-    ctx.fillStyle = '#d9caab';
-    ctx.fillRect(TILE, 7.25 * TILE, 20 * TILE, 0.5 * TILE);
+    for (const room of getActiveRooms(this.state)) {
+      const door = room.door;
+      if (!door) continue;
+      const x = door.x * TILE;
+      const y = door.y * TILE;
+      if (door.edge === 'left' || door.edge === 'right') ctx.fillRect(x - 8, y - 15, 16, 30);
+      else ctx.fillRect(x - 15, y - 8, 30, 16);
+    }
+    const entrance = this.state.household.home.entrance || { x: 11.5, y: 16.5 };
+    ctx.fillRect(entrance.x * TILE - 16, entrance.y * TILE - 12, 32, 20);
   }
 
   drawHomeWindows() {
     const ctx = this.ctx;
-    for (const x of [8.5, 18]) {
+    for (const room of getActiveRooms(this.state)) {
+      if (room.id === 'bathroom') continue;
+      const x = (room.x + Math.min(room.w - 1.5, Math.max(1, room.w * .55))) * TILE;
+      const y = room.y * TILE - 5;
       ctx.fillStyle = '#b8d7d6';
-      ctx.fillRect(x * TILE, TILE - 5, 3.2 * TILE, 18);
+      ctx.fillRect(x, y, Math.min(2.4, room.w * .35) * TILE, 18);
       ctx.fillStyle = '#edf7f4';
-      ctx.fillRect(x * TILE + 5, TILE - 2, 3.2 * TILE - 10, 11);
+      ctx.fillRect(x + 5, y + 3, Math.min(2.4, room.w * .35) * TILE - 10, 10);
     }
   }
 
@@ -252,6 +261,30 @@ export class Renderer {
         ctx.strokeStyle = '#8da6aa'; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
         ctx.fillStyle = '#75898c'; ctx.beginPath(); ctx.arc(x + w * 0.75, y + h * 0.2, 6, 0, Math.PI * 2); ctx.fill();
         break;
+      case 'laundryBasket':
+        ctx.fillStyle='#9b7658'; ctx.fillRect(x,y,w,h); ctx.fillStyle='#d8bd96';
+        for(let i=4;i<w-3;i+=7) ctx.fillRect(x+i,y+3,2,h-6); break;
+      case 'washingMachine':
+      case 'dishwasher':
+        ctx.fillStyle='#d9dfdc'; ctx.fillRect(x,y,w,h); ctx.fillStyle='#68757a'; ctx.beginPath(); ctx.arc(x+w/2,y+h*.58,Math.min(w,h)*.28,0,Math.PI*2); ctx.fill(); break;
+      case 'dishRack':
+        ctx.fillStyle='#a77f5e'; ctx.fillRect(x,y+h*.55,w,h*.25); ctx.strokeStyle='#dce6e2'; ctx.lineWidth=2;
+        for(let i=5;i<w-3;i+=8){ctx.beginPath();ctx.moveTo(x+i,y+h*.15);ctx.lineTo(x+i,y+h*.65);ctx.stroke();} break;
+      case 'exerciseMat':
+        ctx.fillStyle='#6e8f99'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#4f6f78'; ctx.strokeRect(x,y,w,h); break;
+      case 'dumbbells':
+        ctx.fillStyle='#39414b'; ctx.fillRect(x+w*.2,y+h*.43,w*.6,h*.14); ctx.fillRect(x,y+h*.2,w*.22,h*.6); ctx.fillRect(x+w*.78,y+h*.2,w*.22,h*.6); break;
+      case 'easel':
+        ctx.strokeStyle='#806044'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(x+w*.5,y);ctx.lineTo(x+w*.15,y+h);ctx.moveTo(x+w*.5,y);ctx.lineTo(x+w*.85,y+h);ctx.stroke();
+        ctx.fillStyle='#e7d5ae'; ctx.fillRect(x+w*.18,y+h*.12,w*.64,h*.55); ctx.fillStyle='#b86658'; ctx.fillRect(x+w*.3,y+h*.3,w*.18,h*.18); break;
+      case 'keyboard':
+        ctx.fillStyle='#343943'; ctx.fillRect(x,y,w,h); for(let i=3;i<w-3;i+=7){ctx.fillStyle='#f2eee4';ctx.fillRect(x+i,y+h*.35,5,h*.55);} break;
+      case 'sewingKit':
+        ctx.fillStyle='#b77a72'; ctx.fillRect(x,y,w,h); ctx.fillStyle='#f3d7cc'; ctx.fillRect(x+5,y+5,w-10,h-10); break;
+      case 'gardenKit':
+        ctx.fillStyle='#7d5b43';ctx.fillRect(x,y+h*.55,w,h*.45);ctx.fillStyle='#5d8f58';ctx.beginPath();ctx.arc(x+w*.5,y+h*.35,w*.28,0,Math.PI*2);ctx.fill();break;
+      case 'gameConsole':
+        ctx.fillStyle='#303640';ctx.fillRect(x,y,w,h);ctx.fillStyle='#7da4b2';ctx.fillRect(x+w*.25,y+h*.3,w*.5,h*.35);break;
       default:
         ctx.fillStyle = '#8e735c';
         ctx.fillRect(x, y, w, h);
@@ -265,20 +298,61 @@ export class Renderer {
     ctx.fillRect(x - 2, y - 4, 16, 6);
   }
 
+  drawHouseholdLife() {
+    const ctx = this.ctx;
+    const home = this.state.household.home;
+    const meal = home.meal;
+    const table = getFurnitureRects(this.state).find(item => ['diningSet','basicTable'].includes(item.id));
+    if (table && meal?.phase && meal.phase !== 'idle') {
+      const servings = Math.max(1, meal.attendees?.length || 3);
+      for (let i=0;i<Math.min(servings,6);i+=1) {
+        const px = table.x + 13 + (i%3)*Math.max(16,(table.w-26)/3);
+        const py = table.y + 10 + Math.floor(i/3)*Math.max(18,table.h-20);
+        ctx.fillStyle='#f4eee2'; ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle=meal.phase==='ready'||meal.phase==='eating'?'#c98652':'#9b8c72';ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();
+      }
+    }
+    const chores = home.chores || {};
+    if ((chores.dirtyDishes||0)>0) {
+      const rack=getFurnitureRects(this.state).find(item=>item.id==='dishRack');
+      if(rack){ctx.fillStyle='#f0eee5';for(let i=0;i<Math.min(5,chores.dirtyDishes);i++){ctx.beginPath();ctx.arc(rack.x+8+i*7,rack.y+4,4,0,Math.PI*2);ctx.fill();}}
+    }
+  }
+
+  drawSpeechBubbles(scene) {
+    const ctx = this.ctx;
+    const stamp = this.state.time.totalDays * 1440 + this.state.time.minute;
+    const family = [this.state.player, ...this.state.parents, ...this.state.siblings, this.state.nanny].filter(Boolean);
+    const residentViews = getVisibleResidents(this.state, scene);
+    const people = new Map([...family, ...residentViews].map(person => [person.id, person]));
+    const bubbles = [...(this.state.household.home.speech || []), ...(this.state.social?.speech || [])];
+    for (const bubble of bubbles) {
+      if (bubble.untilStamp < stamp) continue;
+      const person = people.get(bubble.personId);
+      if (!person || person.location !== scene) continue;
+      const text = String(bubble.text).slice(0, 34);
+      ctx.font = '11px system-ui, sans-serif';
+      const width = Math.min(190, ctx.measureText(text).width + 18);
+      const x = clamp(person.x - width / 2, 6, CANVAS_WIDTH - width - 6);
+      const y = Math.max(8, person.y - 58);
+      ctx.fillStyle = 'rgba(247,242,231,.96)';
+      ctx.fillRect(x, y, width, 25);
+      ctx.strokeStyle = '#172033'; ctx.lineWidth = 2; ctx.strokeRect(x, y, width, 25);
+      ctx.fillStyle = '#172033'; ctx.fillText(text, x + 9, y + 17);
+    }
+  }
+
   drawConstruction() {
     const construction = this.state.household.home.construction;
     if (!construction) return;
+    const room = this.state.household.home.rooms.find(item => item.id === construction.roomId) || {x:1,y:9,w:8,h:7};
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(226,173,72,.24)';
-    ctx.fillRect(TILE, 9 * TILE, 9 * TILE, 8 * TILE);
-    ctx.strokeStyle = '#d68a35';
-    ctx.lineWidth = 5;
-    ctx.setLineDash([12, 8]);
-    ctx.strokeRect(TILE, 9 * TILE, 9 * TILE, 8 * TILE);
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#172033';
-    ctx.font = 'bold 14px ui-monospace, monospace';
-    ctx.fillText(`CONSTRUCTION ${Math.round(construction.progress)}%`, 2 * TILE, 13 * TILE);
+    ctx.fillRect(room.x*TILE, room.y*TILE, room.w*TILE, room.h*TILE);
+    ctx.strokeStyle = '#d68a35'; ctx.lineWidth = 5; ctx.setLineDash([12,8]);
+    ctx.strokeRect(room.x*TILE, room.y*TILE, room.w*TILE, room.h*TILE); ctx.setLineDash([]);
+    ctx.fillStyle = '#172033'; ctx.font = 'bold 14px ui-monospace, monospace';
+    ctx.fillText(`CONSTRUCTION ${Math.round(construction.progress)}%`, room.x*TILE+12, (room.y+room.h/2)*TILE);
   }
 
   drawTown() {
@@ -435,12 +509,16 @@ export class Renderer {
 
   drawPerson(person, isPlayer, clickable) {
     if (!person.appearance) person.appearance = { skin: '#d9a472', hair: '#4b342d', top: this.residentColor(person), bottom: '#26384a', hairStyle: 'short', accessory: 'none' };
-    const sittingActivities = new Set(['breakfast','lunch','dinner','eating','familyTime','relaxing','retirement','hobby','homework','study','childcare','playing']);
+    const sittingActivities = new Set(['breakfast','lunch','dinner','eating','familyMeal','familyTime','conversation','relaxing','retirement','hobby','homework','study','childcare','playing']);
     const pose = person.activity?.type === 'sleeping' ? 'sleeping' : sittingActivities.has(person.activity?.type) ? 'sitting' : 'standing';
     const box = drawTopDownCharacter(this.ctx, person, this.animationClock, { highlight: isPlayer, pose });
     if (person.activity?.type === 'cooking' || (person.activity?.type === 'hobby' && person.activity?.hobbyId === 'cooking')) this.drawActivityBubble(person, '🍳');
     if (person.activity?.type === 'working' || person.activity?.type === 'remoteWork') this.drawActivityBubble(person, '▣');
     if (person.activity?.type === 'school' || person.activity?.type === 'homework') this.drawActivityBubble(person, '✎');
+    if (person.activity?.type === 'washDishes') this.drawActivityBubble(person, '◌');
+    if (person.activity?.type === 'laundry') this.drawActivityBubble(person, '▧');
+    if (person.activity?.type === 'conversation') this.drawActivityBubble(person, '…');
+    if (person.activity?.type === 'hobby' && person.activity?.hobbyId === 'painting') this.drawActivityBubble(person, '▤');
     this.drawNameTag(person, box.x, box.y - box.height / 2 - 5, isPlayer);
     this.personHitboxes.push({ id: person.id, x: box.x - box.width / 2, y: box.y - box.height / 2, w: box.width, h: box.height, person, clickable: clickable || !person.id.startsWith('resident-') });
   }
@@ -483,7 +561,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(19,26,39,.72)';
       ctx.fillRect(16, 14, 240, 24);
       ctx.fillStyle = '#f7f2e7';
-      ctx.fillText(`${this.state.household.label.toUpperCase()} · CONDITION ${Math.round(this.state.household.home.condition)}`, 25, 30);
+      ctx.fillText(`${this.state.household.label.toUpperCase()} · ${this.state.household.home.layoutLabel.toUpperCase()} · ${formatTime(this.state.time.minute)}`, 25, 30);
     }
   }
 

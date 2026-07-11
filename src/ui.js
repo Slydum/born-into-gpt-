@@ -79,7 +79,7 @@ export class UI {
       calendarLabel: el('calendarLabel'), clockLabel: el('clockLabel'), moneyTop: el('moneyTop'),
       playerName: el('playerName'), ageLabel: el('ageLabel'), stageBadge: el('stageBadge'), portrait: el('portrait'),
       dayLabel: el('dayLabel'), timeLabel: el('timeLabel'), placeLabel: el('placeLabel'), moneyLabel: el('moneyLabel'),
-      needsList: el('needsList'), familyList: el('familyList'), familyMood: el('familyMood'),
+      needsList: el('needsList'), playerTraits: el('playerTraits'), familyList: el('familyList'), familyMood: el('familyMood'),
       objectiveTag: el('objectiveTag'), objectiveText: el('objectiveText'), scheduleText: el('scheduleText'),
       homeSummary: el('homeSummary'), homeTierLabel: el('homeTierLabel'), townSummary: el('townSummary'),
       eventLog: el('eventLog'), ledgerList: el('ledgerList'),
@@ -137,6 +137,7 @@ export class UI {
     this.dom.placeLabel.textContent = locationLabel(state, player.location);
     this.dom.moneyLabel.textContent = peso(state.household.money);
     this.renderNeeds();
+    this.renderPlayerTraits();
     this.renderFamily();
     this.renderObjective();
     this.renderHome();
@@ -157,6 +158,23 @@ export class UI {
     el('needsToggle').textContent = this.needsExpanded ? 'Less' : 'Details';
   }
 
+  renderPlayerTraits() {
+    const player = this.state.player;
+    const developed = (player.traits || []).map(trait => trait.label || TRAIT_LABELS[trait.id] || titleCase(trait.id));
+    const seeds = Object.entries(player.traitSeeds || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id, value]) => `${TRAIT_LABELS[id] || titleCase(id)} ${Math.round(value)}`);
+    const hobbies = (player.hobbies || []).map(titleCase);
+    const skills = Object.entries(player.skills || {}).filter(([, value]) => value > 0)
+      .sort((a, b) => b[1] - a[1]).slice(0, 4)
+      .map(([id, value]) => `${titleCase(id)} ${Math.floor(value)}`);
+    this.dom.playerTraits.innerHTML = `
+      <div class="trait-tags">${(developed.length ? developed : seeds).map(label => `<span>${label}</span>`).join('')}</div>
+      <p><strong>Interests:</strong> ${hobbies.length ? hobbies.join(', ') : 'Still developing'}</p>
+      ${skills.length ? `<p><strong>Practiced skills:</strong> ${skills.join(', ')}</p>` : '<p>Your routines and choices will turn tendencies into lasting traits.</p>'}`;
+  }
+
   renderFamily() {
     const state = this.state;
     const relationship = state.family.relationship;
@@ -164,9 +182,11 @@ export class UI {
       ? relationship.tension > 68 ? 'Tense' : relationship.affection > 68 ? 'Warm' : 'Steady'
       : 'Single-parent home';
     const members = [...state.parents, ...state.siblings, state.nanny].filter(Boolean);
+    const activeCaregiver = this.simulation.getActiveCaregiver?.();
     const familyContext = `<section class="family-context">
       <div><span>Birth order</span><strong>${state.family.birthOrder?.label || 'Child'}</strong></div>
-      <div><span>Childcare</span><strong>${state.family.childcare?.label || 'Family care'}</strong></div>
+      <div><span>Childcare plan</span><strong>${state.family.childcare?.label || 'Family care'}</strong></div>
+      <div><span>Active caregiver</span><strong>${activeCaregiver ? activeCaregiver.name : 'No one available'}</strong></div>
       <p>${state.family.childcare?.reason || ''}</p>
     </section>`;
     this.dom.familyList.innerHTML = familyContext + members.map(person => {
@@ -201,7 +221,7 @@ export class UI {
   }
 
   getScheduleDescription(player) {
-    const day = dayName(this.state.time.totalDays);
+    const day = `${dayName(this.state.time.totalDays)}, Day ${Math.floor(this.state.time.totalDays)+1} at ${formatTime(this.state.time.minute)}`;
     const stage = player.stage;
     if (stage === 'baby') return `${day}: caregivers decide where you go. Crying may interrupt their plans.`;
     if (stage === 'toddler') return `${day}: meals, play, naps, exploration, and supervised outings.`;
@@ -214,27 +234,41 @@ export class UI {
   renderHome() {
     const state = this.state;
     const home = state.household.home;
-    this.dom.homeTierLabel.textContent = `${state.household.label} · Tier ${state.household.tier}`;
+    const chores = home.chores || {};
+    const meal = home.meal || {};
+    this.dom.homeTierLabel.textContent = `${state.household.label} · ${home.layoutLabel || 'Family plan'}`;
     const rooms = getActiveRooms(state).map(room => ROOM_LABELS[room.id] || room.label);
-    const wishlist = home.wishlist.slice(0, 4);
+    const wishlist = home.wishlist.slice(0, 5);
     const project = home.construction
-      ? `<div class="home-project"><strong>${home.construction.label}</strong><span>${Math.round(home.construction.progress)}% complete</span></div>`
+      ? `<div class="home-project"><strong>${home.construction.label}</strong><span>${Math.round(home.construction.progress)}% · completes around Day ${home.construction.dueDay + 1}</span></div>`
       : home.deliveries.length
         ? `<div class="home-project"><strong>Delivery pending</strong><span>${home.deliveries.map(item => item.label).join(', ')}</span></div>`
-        : '<div class="home-project"><strong>No active construction</strong><span>The family will evaluate needs daily.</span></div>';
+        : '<div class="home-project"><strong>No active construction</strong><span>The family evaluates space, hobbies, and chores every day.</span></div>';
+    const mealLabel = meal.phase === 'idle' ? 'No meal underway' : `${titleCase(meal.type || 'meal')} · ${titleCase(meal.phase)}`;
+    const cook = meal.cookId ? getPersonById(state, meal.cookId) : null;
+    const equipment = [...new Set([...(home.hobbies?.equipment || []), ...home.furniture.filter(item => ['exerciseMat','dumbbells','easel','keyboard','sewingKit','gardenKit','gameConsole'].includes(item.id)).map(item => item.id)])];
+    const artworks = (home.hobbies?.artworks || []).slice(-4).reverse();
     this.dom.homeSummary.innerHTML = `
-      <div class="home-metrics">
-        ${percentBar('Condition', home.condition)}
-        ${percentBar('Cleanliness', home.cleanliness)}
+      <div class="home-metrics">${percentBar('Condition', home.condition)}${percentBar('Cleanliness', home.cleanliness)}</div>
+      <div class="house-life-grid">
+        <div><span>House layout</span><strong>${home.layoutLabel || home.layoutId || 'Family home'}</strong></div>
+        <div><span>Current meal</span><strong>${mealLabel}</strong></div>
+        <div><span>Cooking</span><strong>${cook ? cook.name.split(' ')[0] : 'Nobody'}</strong></div>
+        <div><span>Food portions</span><strong>${state.household.food}</strong></div>
+        <div><span>Dirty dishes</span><strong>${chores.dirtyDishes || 0}</strong></div>
+        <div><span>Laundry</span><strong>${chores.laundryLoads || 0} load${chores.laundryLoads === 1 ? '' : 's'}</strong></div>
+        <div><span>Trash</span><strong>${chores.trash || 0}</strong></div>
+        <div><span>Floor mess</span><strong>${Math.round(chores.floorMess || 0)}%</strong></div>
       </div>
       ${project}
       <h4>Rooms</h4><p>${rooms.join(' · ')}</p>
+      <h4>Hobby equipment</h4><p>${equipment.length ? equipment.map(id => titleCase(id.replace(/([A-Z])/g,' $1'))).join(' · ') : 'The family has not bought dedicated hobby equipment yet.'}</p>
+      <h4>Paintings and crafts</h4>
+      ${artworks.length ? `<div class="art-list">${artworks.map(item => `<div class="art-row"><span><strong>${item.title}</strong><small>${item.creator.split(' ')[0]} · quality ${Math.round(item.quality)}</small></span><strong>${item.sold ? 'Sold' : peso(item.value)}</strong></div>`).join('')}</div>` : '<p class="empty-copy">No finished artwork yet.</p>'}
       <h4>Household wishlist</h4>
       ${wishlist.length ? `<ol class="wishlist">${wishlist.map(item => `<li><strong>${item.label}</strong><span>${peso(item.cost)} · ${item.reason || 'Optional upgrade'}</span></li>`).join('')}</ol>` : '<p class="empty-copy">No urgent purchases right now.</p>'}
-      <h4>Childcare arrangement</h4>
-      <p><strong>${state.family.childcare?.label || 'Family care'}</strong><br>${state.family.childcare?.reason || ''}</p>
-      <h4>Family planning</h4>
-      <p>${state.family.pregnancy ? `A baby is expected around day ${state.family.pregnancy.dueDay + 1}.` : `The parents currently hope for about ${state.family.desiredChildren} child${state.family.desiredChildren === 1 ? '' : 'ren'}.`}</p>
+      <h4>Childcare arrangement</h4><p><strong>${state.family.childcare?.label || 'Family care'}</strong><br>${state.family.childcare?.reason || ''}</p>
+      <h4>Family planning</h4><p>${state.family.pregnancy ? `A baby is expected around day ${state.family.pregnancy.dueDay + 1}.` : `The parents currently hope for about ${state.family.desiredChildren} child${state.family.desiredChildren === 1 ? '' : 'ren'}.`}</p>
     `;
   }
 
@@ -326,6 +360,8 @@ export class UI {
     const isNanny = person.role === 'Nanny';
     this.dom.profileTitle.textContent = person.name;
     const traits = person.traits && !Array.isArray(person.traits) ? person.traits : person.traitSeeds || {};
+    const acquiredTraits = Array.isArray(person.traits) ? person.traits : [];
+    const relationshipRows = (person.relationships || []).slice(0,6).map(rel => `<div class="relationship-chip"><strong>${rel.name || getPersonById(this.state,rel.id)?.name || 'Someone'}</strong><span>${titleCase(rel.type || 'acquaintance')} · affection ${Math.round(rel.affection || 0)} · trust ${Math.round(rel.trust || 0)}</span></div>`).join('');
     const traitRows = Object.entries(traits).slice(0, 10).map(([key, value]) => traitMeter(TRAIT_LABELS[key] || titleCase(key), value)).join('');
     const needs = person.needs ? [
       percentBar('Energy', person.needs.energy), percentBar('Food', person.needs.satiety),
@@ -337,10 +373,12 @@ export class UI {
       <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${locationLabel(this.state, person.location || 'home')}</p></div></div>
       <div class="profile-status"><span>Current activity</span><strong>${isResident ? person.job?.label || 'Following a town routine' : this.simulation.getPersonStatus(person)}</strong></div>
       ${person.job ? `<div class="profile-status"><span>Job</span><strong>${person.job.label}</strong><small>${titleCase(person.job.schedule)} schedule · ${person.role === 'Nanny' ? `${peso(person.salaryPerDay || 0)} per day` : person.job.pay ? `${peso(person.job.pay[0])}–${peso(person.job.pay[1])} per shift` : ''}</small></div>` : ''}
-      ${person.hobbies?.length ? `<div class="profile-status"><span>Hobbies</span><strong>${person.hobbies.map(titleCase).join(' · ')}</strong></div>` : ''}
+      ${person.hobbies?.length ? `<div class="profile-status"><span>Hobbies and interests</span><strong>${person.hobbies.map(titleCase).join(' · ')}</strong><small>${Object.entries(person.skills || {}).filter(([,value]) => value > 0).map(([key,value]) => `${titleCase(key)} ${Math.round(value)}`).join(' · ') || 'Skills grow through practice.'}</small></div>` : ''}
+      ${acquiredTraits.length ? `<h4>Developed traits</h4><div class="trait-tags">${acquiredTraits.map(item => `<span>${item.label || titleCase(item.id)}</span>`).join('')}</div>` : ''}
       ${needs ? `<h4>Needs</h4><div class="bars">${needs}</div>` : ''}
       ${traitRows ? `<h4>Personality</h4><div class="trait-list">${traitRows}</div>` : ''}
       ${relationship}
+      ${relationshipRows ? `<h4>Relationships</h4><div class="relationship-list">${relationshipRows}</div>` : ''}
       ${person.struggle ? `<div class="profile-warning"><strong>Current struggle</strong><span>${titleCase(person.struggle)}</span></div>` : ''}
     `;
     this.dom.profileOverlay.classList.remove('hidden');
