@@ -3,6 +3,7 @@ import { ACTIVITY_LABELS, ROOM_LABELS, TRAIT_LABELS } from './data.js';
 import { getActiveRooms, getAllFamily, getPersonById, getVisibleResidents, locationLabel } from './world.js';
 import { clamp, dayName, formatAge, formatTime, gameDateLabel, peso, titleCase } from './utils.js';
 import { portraitMarkup } from './art.js';
+import { v7PersonById } from './v7.js';
 
 function el(id) {
   return document.getElementById(id);
@@ -74,6 +75,7 @@ export class UI {
     this.activeTab = 'me';
     this.needsExpanded = false;
     this.profileReturn = null;
+    this.selectedPhoneContactId = null;
     this.dom = {
       pauseBtn: el('pauseBtn'), speedBtn: el('speedBtn'), saveBtn: el('saveBtn'), menuBtn: el('menuBtn'),
       calendarLabel: el('calendarLabel'), clockLabel: el('clockLabel'), moneyTop: el('moneyTop'),
@@ -81,7 +83,7 @@ export class UI {
       dayLabel: el('dayLabel'), timeLabel: el('timeLabel'), placeLabel: el('placeLabel'), moneyLabel: el('moneyLabel'),
       needsList: el('needsList'), playerTraits: el('playerTraits'), familyList: el('familyList'), familyMood: el('familyMood'),
       objectiveTag: el('objectiveTag'), objectiveText: el('objectiveText'), scheduleText: el('scheduleText'),
-      homeSummary: el('homeSummary'), homeTierLabel: el('homeTierLabel'), townSummary: el('townSummary'),
+      homeSummary: el('homeSummary'), homeTierLabel: el('homeTierLabel'), townSummary: el('townSummary'), socialSummary:el('socialSummary'), socialStatus:el('socialStatus'), lifeSummary:el('lifeSummary'),
       eventLog: el('eventLog'), ledgerList: el('ledgerList'),
       modeBadge: el('modeBadge'), goalLabel: el('goalLabel'), stopBtn: el('stopBtn'), resumeBtn: el('resumeBtn'),
       directBtn: el('directBtn'), destinationBtn: el('destinationBtn'), actionBtn: el('actionBtn'), cryBtn: el('cryBtn'),
@@ -89,7 +91,8 @@ export class UI {
       panelSections: [...document.querySelectorAll('[data-panel-section]')],
       profileOverlay: el('profileOverlay'), profileTitle: el('profileTitle'), profileBody: el('profileBody'), profileCloseBtn: el('profileCloseBtn'),
       destinationOverlay: el('destinationOverlay'), destinationChoices: el('destinationChoices'), destinationCloseBtn: el('destinationCloseBtn'),
-      modalOverlay: el('modalOverlay'), modalEyebrow: el('modalEyebrow'), modalTitle: el('modalTitle'), modalBody: el('modalBody'), modalChoices: el('modalChoices')
+      modalOverlay: el('modalOverlay'), modalEyebrow: el('modalEyebrow'), modalTitle: el('modalTitle'), modalBody: el('modalBody'), modalChoices: el('modalChoices'),
+      phoneBtn:el('phoneBtn'), phoneOverlay:el('phoneOverlay'), phoneCloseBtn:el('phoneCloseBtn'), phoneContacts:el('phoneContacts'), phoneThread:el('phoneThread'), phoneActions:el('phoneActions'), invitePhoneBtn:el('invitePhoneBtn'), floorControls:el('floorControls')
     };
     this.bindBaseUI();
   }
@@ -109,6 +112,12 @@ export class UI {
     el('playerCardBtn').addEventListener('click', () => this.showProfile(this.state.player));
     el('needsToggle').addEventListener('click', () => { this.needsExpanded = !this.needsExpanded; this.renderNeeds(); });
     el('clearLogBtn').addEventListener('click', () => { this.state.log = []; this.renderLog(); });
+    this.dom.phoneBtn?.addEventListener('click', () => this.openPhone());
+    this.dom.phoneCloseBtn?.addEventListener('click', () => this.closePhone());
+    this.dom.phoneOverlay?.addEventListener('click', event => { if (event.target === this.dom.phoneOverlay) this.closePhone(); });
+    for (const button of document.querySelectorAll('[data-message-kind]')) button.addEventListener('click', () => this.sendPhoneMessage(button.dataset.messageKind));
+    this.dom.invitePhoneBtn?.addEventListener('click', () => this.invitePhoneContact());
+    for (const button of document.querySelectorAll('[data-floor]')) button.addEventListener('click', () => { if (this.simulation.changeHomeFloor(button.dataset.floor)) this.render(); });
   }
 
   setTab(tab) {
@@ -142,6 +151,10 @@ export class UI {
     this.renderObjective();
     this.renderHome();
     this.renderTown();
+    this.renderSocial();
+    this.renderLife();
+    this.renderPhoneButton();
+    this.renderFloorControls();
     this.renderLog();
     this.renderLedger();
     this.renderControls();
@@ -181,7 +194,7 @@ export class UI {
     this.dom.familyMood.textContent = relationship
       ? relationship.tension > 68 ? 'Tense' : relationship.affection > 68 ? 'Warm' : 'Steady'
       : 'Single-parent home';
-    const members = [...state.parents, ...state.siblings, state.nanny].filter(Boolean);
+    const members = [...state.parents, ...state.siblings, state.nanny, ...(state.extendedFamily || [])].filter(Boolean);
     const activeCaregiver = this.simulation.getActiveCaregiver?.();
     const familyContext = `<section class="family-context">
       <div><span>Birth order</span><strong>${state.family.birthOrder?.label || 'Child'}</strong></div>
@@ -190,13 +203,13 @@ export class UI {
       <p>${state.family.childcare?.reason || ''}</p>
     </section>`;
     this.dom.familyList.innerHTML = familyContext + members.map(person => {
-      const status = this.simulation.getPersonStatus(person);
+      const status = person.movedOut ? person.residence || 'Lives elsewhere' : this.simulation.getPersonStatus(person);
       const isParent = state.parents.some(parent => parent.id === person.id);
       const role = isParent
         ? `${person.job?.label || 'Caregiver'} · ${formatAge(person.age)}`
         : person.role === 'Nanny'
           ? `${person.job?.label || 'Nanny'} · ${formatAge(person.age)}`
-          : `Sibling · ${formatAge(person.age)}`;
+          : `Sibling · ${formatAge(person.age)}${person.movedOut ? ` · ${person.residence}` : ''}`;
       return `<button type="button" class="family-card" data-person-id="${person.id}">
         <span class="family-avatar">${portraitMarkup(person, 'mini-portrait')}</span>
         <span class="family-copy"><strong>${person.name}</strong><small>${role}</small></span>
@@ -207,7 +220,7 @@ export class UI {
       this.dom.familyList.insertAdjacentHTML('beforeend', `<section class="family-history"><h4>Family history</h4>${state.family.history.slice(0, 5).map(item => `<p>• ${item}</p>`).join('')}</section>`);
     }
     for (const button of this.dom.familyList.querySelectorAll('[data-person-id]')) {
-      button.addEventListener('click', () => this.showProfile(getPersonById(state, button.dataset.personId)));
+      button.addEventListener('click', () => this.showProfile(v7PersonById(state, button.dataset.personId)));
     }
   }
 
@@ -238,13 +251,14 @@ export class UI {
     const meal = home.meal || {};
     this.dom.homeTierLabel.textContent = `${state.household.label} · ${home.layoutLabel || 'Family plan'}`;
     const rooms = getActiveRooms(state).map(room => ROOM_LABELS[room.id] || room.label);
+    const assignments=[state.player,...state.parents,...state.siblings,state.nanny].filter(Boolean).filter(person=>!person.movedOut).map(person=>({person,room:home.roomAssignments?.[person.id],bed:home.bedAssignments?.[person.id]}));
     const wishlist = home.wishlist.slice(0, 5);
     const project = home.construction
       ? `<div class="home-project"><strong>${home.construction.label}</strong><span>${Math.round(home.construction.progress)}% · completes around Day ${home.construction.dueDay + 1}</span></div>`
       : home.deliveries.length
         ? `<div class="home-project"><strong>Delivery pending</strong><span>${home.deliveries.map(item => item.label).join(', ')}</span></div>`
         : '<div class="home-project"><strong>No active construction</strong><span>The family evaluates space, hobbies, and chores every day.</span></div>';
-    const mealLabel = meal.phase === 'idle' ? 'No meal underway' : `${titleCase(meal.type || 'meal')} · ${titleCase(meal.phase)}`;
+    const mealLabel = ['idle','cleared'].includes(meal.phase) ? 'No meal currently served' : `${titleCase(meal.type || 'meal')} · ${titleCase(meal.phase)}`;
     const cook = meal.cookId ? getPersonById(state, meal.cookId) : null;
     const equipment = [...new Set([...(home.hobbies?.equipment || []), ...home.furniture.filter(item => ['exerciseMat','dumbbells','easel','keyboard','sewingKit','gardenKit','gameConsole'].includes(item.id)).map(item => item.id)])];
     const artworks = (home.hobbies?.artworks || []).slice(-4).reverse();
@@ -261,7 +275,9 @@ export class UI {
         <div><span>Floor mess</span><strong>${Math.round(chores.floorMess || 0)}%</strong></div>
       </div>
       ${project}
-      <h4>Rooms</h4><p>${rooms.join(' · ')}</p>
+      <h4>Visible floor</h4><p><strong>${(home.currentFloor||0)===0?'Ground Floor':'Second Floor'}</strong> · ${rooms.join(' · ')}</p>
+      <h4>Room and bed assignments</h4><div class="assignment-list">${assignments.map(({person,room,bed})=>`<div><strong>${person.name.split(' ')[0]}</strong><span>${room ? titleCase(room.replace(/([A-Z])/g,' $1')) : 'No room'} · ${bed?.furnitureId ? titleCase(bed.furnitureId.replace(/([A-Z])/g,' $1')) : 'No assigned bed'}</span></div>`).join('')}</div>
+      ${!home.floors?.some(floor=>floor.id===1&&floor.active) && !home.construction ? `<button type="button" id="requestSecondFloorBtn" class="secondary-inline-btn">Request second-floor project</button>` : ''}
       <h4>Hobby equipment</h4><p>${equipment.length ? equipment.map(id => titleCase(id.replace(/([A-Z])/g,' $1'))).join(' · ') : 'The family has not bought dedicated hobby equipment yet.'}</p>
       <h4>Paintings and crafts</h4>
       ${artworks.length ? `<div class="art-list">${artworks.map(item => `<div class="art-row"><span><strong>${item.title}</strong><small>${item.creator.split(' ')[0]} · quality ${Math.round(item.quality)}</small></span><strong>${item.sold ? 'Sold' : peso(item.value)}</strong></div>`).join('')}</div>` : '<p class="empty-copy">No finished artwork yet.</p>'}
@@ -270,6 +286,11 @@ export class UI {
       <h4>Childcare arrangement</h4><p><strong>${state.family.childcare?.label || 'Family care'}</strong><br>${state.family.childcare?.reason || ''}</p>
       <h4>Family planning</h4><p>${state.family.pregnancy ? `A baby is expected around day ${state.family.pregnancy.dueDay + 1}.` : `The parents currently hope for about ${state.family.desiredChildren} child${state.family.desiredChildren === 1 ? '' : 'ren'}.`}</p>
     `;
+    el('requestSecondFloorBtn')?.addEventListener('click', () => {
+      const ok=this.simulation.requestSecondFloor();
+      if (!ok) this.showEvent({eyebrow:'HOME PLAN',title:'Second floor not available yet',body:'The household needs enough savings and no other active project.',choices:[{label:'Okay'}]});
+      this.render();
+    });
   }
 
   renderTown() {
@@ -285,6 +306,85 @@ export class UI {
     for (const button of this.dom.townSummary.querySelectorAll('[data-resident-id]')) {
       button.addEventListener('click', () => this.showProfile(getPersonById(this.state, button.dataset.residentId)));
     }
+  }
+
+
+  renderSocial() {
+    if (!this.dom.socialSummary) return;
+    const player=this.state.player;
+    const rels=[...(player.relationships||[])].sort((a,b)=>(b.affection||0)-(a.affection||0));
+    const friends=rels.filter(rel=>['friend','close friend'].includes(rel.type));
+    const acquaintances=rels.filter(rel=>rel.type==='acquaintance');
+    const roster=(this.state.social.classRoster||[]).map(id=>this.state.town.residents.find(person=>person.id===id)).filter(Boolean);
+    this.dom.socialStatus.textContent=friends.length?`${friends.length} friend${friends.length===1?'':'s'}`:'Looking for connection';
+    this.dom.socialSummary.innerHTML=`
+      <div class="social-metrics"><div><span>Social fulfillment</span><strong>${Math.round(player.socialNeed||0)}/100</strong></div><div><span>Friends</span><strong>${friends.length}</strong></div><div><span>Acquaintances</span><strong>${acquaintances.length}</strong></div></div>
+      <h4>Relationships</h4>
+      <div class="relationship-list">${rels.length?rels.slice(0,10).map(rel=>{const person=v7PersonById(this.state,rel.id);return `<button type="button" data-social-person="${rel.id}"><strong>${person?.name||rel.name||'Someone'}</strong><span>${titleCase(rel.type||'stranger')} · familiarity ${Math.round(rel.familiarity||0)} · affection ${Math.round(rel.affection||0)} · trust ${Math.round(rel.trust||0)}</span></button>`}).join(''):'<p class="empty-copy">No relationships yet. School, clubs, parks, family visits, and messages create opportunities.</p>'}</div>
+      <h4>Persistent classmates</h4><div class="class-roster">${roster.map(person=>`<button type="button" data-social-person="${person.id}"><strong>${person.name}</strong><span>${titleCase(person.stage)} · ${(person.hobbies||[]).map(titleCase).slice(0,2).join(', ')}</span></button>`).join('')||'<p class="empty-copy">Classmates appear when school begins.</p>'}</div>
+      <h4>Clubs</h4>${(this.state.social.clubs||[]).length?this.state.social.clubs.map(club=>`<p>• <strong>${club.label}</strong> · ${club.memberIds.length} recurring members</p>`).join(''):'<p class="empty-copy">Clubs unlock as interests develop.</p>'}
+      <h4>Plans & invitations</h4>${(this.state.social.invitations||[]).length?this.state.social.invitations.slice(-5).reverse().map(plan=>`<p>• ${v7PersonById(this.state,plan.contactId)?.name||'Someone'} · ${titleCase(plan.status)} · Day ${plan.day+1} at ${plan.location}</p>`).join(''):'<p class="empty-copy">No plans yet.</p>'}`;
+    for(const button of this.dom.socialSummary.querySelectorAll('[data-social-person]')) button.addEventListener('click',()=>this.showProfile(v7PersonById(this.state,button.dataset.socialPerson)));
+  }
+
+  renderLife() {
+    if (!this.dom.lifeSummary) return;
+    const events=this.state.events?.history||[];
+    const milestones=this.state.player.romance?.milestones||[];
+    const adulthood=this.state.adulthood?.transitions?.[this.state.player.id];
+    this.dom.lifeSummary.innerHTML=`
+      <div class="life-state-grid"><div><span>Current mood</span><strong>${this.state.player.moodState?.label||'Content'}</strong></div><div><span>Health</span><strong>${this.state.player.health?.status||'Well'}</strong></div><div><span>Residence</span><strong>${this.state.player.residence||'Family home'}</strong></div><div><span>Adult path</span><strong>${adulthood?.path?titleCase(adulthood.path):'Not chosen'}</strong></div></div>
+      ${this.state.player.moodState?.reasons?.length?`<p><strong>Mood reasons:</strong> ${this.state.player.moodState.reasons.join(' · ')}</p>`:''}
+      <h4>Romantic milestones</h4>${milestones.length?milestones.slice().reverse().map(item=>`<p>• ${titleCase(item.type.replaceAll('-',' '))} · Day ${item.day+1} · ${v7PersonById(this.state,item.personId)?.name||''}</p>`).join(''):'<p class="empty-copy">Crushes, dates, and age-appropriate milestones can develop from real relationships.</p>'}
+      <h4>Major life events</h4>${events.length?events.slice(0,12).map(event=>`<article class="life-event-card"><small>Day ${event.day+1} · ${titleCase(event.type.replaceAll('-',' '))}</small><strong>${event.label}</strong></article>`).join(''):'<p class="empty-copy">No major events yet.</p>'}
+      <h4>Event settings</h4><p>${Object.entries(this.state.settings||{}).map(([key,value])=>`${titleCase(key.replace(/([A-Z])/g,' $1'))}: ${titleCase(value)}`).join(' · ')}</p>`;
+  }
+
+  renderPhoneButton() {
+    if (!this.dom.phoneBtn) return;
+    this.dom.phoneBtn.hidden=!this.state.phone?.unlocked;
+  }
+
+  renderFloorControls() {
+    if (!this.dom.floorControls) return;
+    const home=this.state.household.home;
+    const hasSecond=home.floors?.some(floor=>floor.id===1&&floor.active);
+    this.dom.floorControls.hidden=!hasSecond || this.state.scene!=='home';
+    for(const button of this.dom.floorControls.querySelectorAll('[data-floor]')) button.classList.toggle('active',Number(button.dataset.floor)===(home.currentFloor||0));
+  }
+
+  openPhone() {
+    if (!this.state.phone?.unlocked) return;
+    this.renderPhone();
+    this.dom.phoneOverlay.classList.remove('hidden');
+  }
+
+  closePhone() { this.dom.phoneOverlay?.classList.add('hidden'); }
+
+  renderPhone() {
+    const ids=[...new Set([...(this.state.social.contacts||[]),...(this.state.extendedFamily||[]).map(person=>person.id)])];
+    const contacts=ids.map(id=>v7PersonById(this.state,id)).filter(Boolean);
+    this.dom.phoneContacts.innerHTML=contacts.length?contacts.map(person=>`<button type="button" data-phone-contact="${person.id}" class="${person.id===this.selectedPhoneContactId?'active':''}"><strong>${person.name}</strong><span>${person.role||titleCase(person.stage)} · ${person.residence||'Nearby'}</span></button>`).join(''):'<p class="empty-copy">Contacts appear after exchanging numbers or through family.</p>';
+    for(const button of this.dom.phoneContacts.querySelectorAll('[data-phone-contact]')) button.addEventListener('click',()=>{this.selectedPhoneContactId=button.dataset.phoneContact;this.renderPhone();});
+    const selected=v7PersonById(this.state,this.selectedPhoneContactId);
+    this.dom.phoneActions.hidden=!selected;
+    if (!selected) {this.dom.phoneThread.innerHTML='<p class="empty-copy">Choose a contact.</p>';return;}
+    const thread=this.state.social.threads?.[selected.id]||[];
+    this.dom.phoneThread.innerHTML=`<header class="thread-header"><strong>${selected.name}</strong><span>${selected.activity?.type==='working'?'At work':selected.activity?.type==='sleeping'?'Sleeping':'Available later'}</span></header><div class="messages">${thread.length?thread.filter(message=>message.stamp<=this.state.time.totalDays*1440+this.state.time.minute||!message.pending).map(message=>`<p class="${message.from===this.state.player.id?'sent':'received'}">${message.text}</p>`).join(''):'<p class="empty-copy">No messages yet.</p>'}</div>`;
+  }
+
+  sendPhoneMessage(kind) {
+    if (!this.selectedPhoneContactId) return;
+    const result=this.simulation.sendPhoneMessage(this.selectedPhoneContactId,kind);
+    if (result?.text) this.showEvent({eyebrow:'PHONE',title:result.ok?'Message sent':'Cannot send',body:result.text,choices:[{label:'Okay'}]});
+    this.renderPhone(); this.renderSocial();
+  }
+
+  invitePhoneContact() {
+    if (!this.selectedPhoneContactId) return;
+    const result=this.simulation.inviteContact(this.selectedPhoneContactId);
+    if (result?.text) this.showEvent({eyebrow:'INVITATION',title:result.ok?'Invitation update':'Cannot invite',body:result.text,choices:[{label:'Okay'}]});
+    this.renderPhone(); this.renderSocial();
   }
 
   renderLog() {
@@ -358,6 +458,7 @@ export class UI {
     const isPlayer = person.id === this.state.player.id;
     const isResident = person.id.startsWith('resident-');
     const isNanny = person.role === 'Nanny';
+    const isAwaySibling = person.role==='Sibling' && person.movedOut;
     this.dom.profileTitle.textContent = person.name;
     const traits = person.traits && !Array.isArray(person.traits) ? person.traits : person.traitSeeds || {};
     const acquiredTraits = Array.isArray(person.traits) ? person.traits : [];
@@ -370,9 +471,13 @@ export class UI {
     const relationship = isParent && this.state.family.relationship ? `
       <div class="profile-grid"><div><span>Affection</span><strong>${Math.round(this.state.family.relationship.affection)}</strong></div><div><span>Trust</span><strong>${Math.round(this.state.family.relationship.trust)}</strong></div><div><span>Tension</span><strong>${Math.round(this.state.family.relationship.tension)}</strong></div></div>` : '';
     this.dom.profileBody.innerHTML = `
-      <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${locationLabel(this.state, person.location || 'home')}</p></div></div>
+      <div class="profile-hero"><div class="profile-avatar portrait-profile">${portraitMarkup(person, 'profile-portrait')}</div><div><span class="stage-badge">${titleCase(person.stage)}</span><h3>${isPlayer ? 'Your character' : isParent ? 'Parent' : isNanny ? 'Nanny' : isResident ? 'Town resident' : isAwaySibling ? 'Older sibling living away' : 'Sibling'}</h3><p>Age ${formatAge(person.age)} · ${person.movedOut ? person.residence : locationLabel(this.state, person.location || 'home')}</p></div></div>
       <div class="profile-status"><span>Current activity</span><strong>${isResident ? person.job?.label || 'Following a town routine' : this.simulation.getPersonStatus(person)}</strong></div>
       ${person.job ? `<div class="profile-status"><span>Job</span><strong>${person.job.label}</strong><small>${titleCase(person.job.schedule)} schedule · ${person.role === 'Nanny' ? `${peso(person.salaryPerDay || 0)} per day` : person.job.pay ? `${peso(person.job.pay[0])}–${peso(person.job.pay[1])} per shift` : ''}</small></div>` : ''}
+      <div class="profile-grid"><div><span>Mood</span><strong>${person.moodState?.label||'Content'}</strong></div><div><span>Health</span><strong>${person.health?.status||'Well'}</strong></div><div><span>Residence</span><strong>${person.residence||'Family home'}</strong></div></div>
+      ${person.health?.conditions?.length?`<div class="profile-warning"><strong>Health conditions</strong><span>${person.health.conditions.map(item=>item.label).join(' · ')}</span></div>`:''}
+      ${person.health?.disability?`<div class="profile-warning"><strong>Disability</strong><span>${person.health.disability.label}</span></div>`:''}
+      ${person.romance?.status && person.romance.status!=='single'?`<div class="profile-status"><span>Relationship</span><strong>${titleCase(person.romance.status)} with ${v7PersonById(this.state,person.romance.partnerId)?.name||'someone'}</strong></div>`:''}
       ${person.hobbies?.length ? `<div class="profile-status"><span>Hobbies and interests</span><strong>${person.hobbies.map(titleCase).join(' · ')}</strong><small>${Object.entries(person.skills || {}).filter(([,value]) => value > 0).map(([key,value]) => `${titleCase(key)} ${Math.round(value)}`).join(' · ') || 'Skills grow through practice.'}</small></div>` : ''}
       ${acquiredTraits.length ? `<h4>Developed traits</h4><div class="trait-tags">${acquiredTraits.map(item => `<span>${item.label || titleCase(item.id)}</span>`).join('')}</div>` : ''}
       ${needs ? `<h4>Needs</h4><div class="bars">${needs}</div>` : ''}

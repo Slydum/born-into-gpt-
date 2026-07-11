@@ -6,6 +6,7 @@ import {
 } from './world.js';
 import { clamp, formatTime, seededPhase, titleCase } from './utils.js';
 import { drawTopDownCharacter } from './art.js';
+import { assignedSleepPosition, assignedSeatPosition } from './v7.js';
 
 const ROOM_COLORS = {
   parentBedroom: ['#dfcda8', '#e7d7b6'],
@@ -14,7 +15,8 @@ const ROOM_COLORS = {
   diningRoom: ['#d2c09a', '#dcc9a7'],
   childBedroom: ['#c8d7d1', '#d5e2dd'],
   teenBedroom: ['#c4d1dc', '#d1dde5'],
-  bathroom: ['#d7e5e4', '#e3efee']
+  bathroom: ['#d7e5e4', '#e3efee'],
+  upperLanding: ['#d8d0bc','#e5ddcb'], upperBedroomA:['#c9d8df','#d7e4ea'], upperBedroomB:['#d8cadd','#e5d7e8'], upperHobbyRoom:['#d9d3ad','#e7e0bd'], upperBathroom:['#d7e5e4','#e3efee']
 };
 
 const SCENE_PALETTES = {
@@ -76,9 +78,10 @@ export class Renderer {
     }
 
     this.drawInteriorDoorGaps();
-    this.drawDoorOpening(11.5 * TILE, 17 * TILE, 'bottom');
+    if ((this.state.household.home.currentFloor || 0) === 0) this.drawDoorOpening(11.5 * TILE, 17 * TILE, 'bottom');
     this.drawHomeWindows();
     this.drawFurniture();
+    this.drawStairs();
     this.drawHouseholdLife();
     this.drawConstruction();
   }
@@ -104,8 +107,7 @@ export class Renderer {
       if (door.edge === 'left' || door.edge === 'right') ctx.fillRect(x - 8, y - 15, 16, 30);
       else ctx.fillRect(x - 15, y - 8, 30, 16);
     }
-    const entrance = this.state.household.home.entrance || { x: 11.5, y: 16.5 };
-    ctx.fillRect(entrance.x * TILE - 16, entrance.y * TILE - 12, 32, 20);
+    if ((this.state.household.home.currentFloor || 0) === 0) { const entrance = this.state.household.home.entrance || { x: 11.5, y: 16.5 }; ctx.fillRect(entrance.x * TILE - 16, entrance.y * TILE - 12, 32, 20); }
   }
 
   drawHomeWindows() {
@@ -142,6 +144,10 @@ export class Renderer {
       case 'toddlerBed':
       case 'childBed':
       case 'siblingBed':
+      case 'teenBed':
+      case 'upperBedA':
+      case 'upperBedB':
+      case 'nannyBed':
         ctx.fillStyle = '#65483e';
         ctx.fillRect(x, y, w, h);
         ctx.fillStyle = item.id === 'parentBed' ? '#8eb1bf' : '#d99b69';
@@ -303,7 +309,7 @@ export class Renderer {
     const home = this.state.household.home;
     const meal = home.meal;
     const table = getFurnitureRects(this.state).find(item => ['diningSet','basicTable'].includes(item.id));
-    if (table && meal?.phase && meal.phase !== 'idle') {
+    if (table && ['ready','eating'].includes(meal?.phase)) {
       const servings = Math.max(1, meal.attendees?.length || 3);
       for (let i=0;i<Math.min(servings,6);i+=1) {
         const px = table.x + 13 + (i%3)*Math.max(16,(table.w-26)/3);
@@ -317,6 +323,18 @@ export class Renderer {
       const rack=getFurnitureRects(this.state).find(item=>item.id==='dishRack');
       if(rack){ctx.fillStyle='#f0eee5';for(let i=0;i<Math.min(5,chores.dirtyDishes);i++){ctx.beginPath();ctx.arc(rack.x+8+i*7,rack.y+4,4,0,Math.PI*2);ctx.fill();}}
     }
+  }
+
+
+  drawStairs() {
+    const home=this.state.household.home;
+    if (!home.stairs?.active) return;
+    const floor=home.currentFloor || 0;
+    const stair=floor===0?home.stairs.ground:home.stairs.upper;
+    const ctx=this.ctx; const x=stair.x*TILE-20; const y=stair.y*TILE-22;
+    ctx.fillStyle='#806b59'; ctx.fillRect(x,y,40,44);
+    for(let i=0;i<5;i+=1){ctx.fillStyle=i%2?'#b49674':'#c5a985';ctx.fillRect(x+4,y+5+i*7,32,5);}
+    ctx.fillStyle='#172033';ctx.font='9px ui-monospace, monospace';ctx.fillText(floor===0?'UP':'DOWN',x+8,y+40);
   }
 
   drawSpeechBubbles(scene) {
@@ -344,7 +362,7 @@ export class Renderer {
 
   drawConstruction() {
     const construction = this.state.household.home.construction;
-    if (!construction) return;
+    if (!construction || (construction.floor ?? 0) !== (this.state.household.home.currentFloor ?? 0)) return;
     const room = this.state.household.home.rooms.find(item => item.id === construction.roomId) || {x:1,y:9,w:8,h:7};
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(226,173,72,.24)';
@@ -487,8 +505,9 @@ export class Renderer {
   }
 
   drawPeople(scene) {
+    const currentFloor=this.state.household.home.currentFloor || 0;
     const family = [this.state.player, ...this.state.parents, ...this.state.siblings, this.state.nanny]
-      .filter(person => person && person.location === scene && !person.carriedBy && person.alive !== false);
+      .filter(person => person && !person.movedOut && person.location === scene && !person.carriedBy && person.alive !== false && (scene !== 'home' || (person.floor ?? 0) === currentFloor));
     for (const person of family) {
       const isPlayer = person.id === this.state.player.id;
       this.drawPerson(person, isPlayer, true);
@@ -509,6 +528,12 @@ export class Renderer {
 
   drawPerson(person, isPlayer, clickable) {
     if (!person.appearance) person.appearance = { skin: '#d9a472', hair: '#4b342d', top: this.residentColor(person), bottom: '#26384a', hairStyle: 'short', accessory: 'none' };
+    const original={x:person.x,y:person.y};
+    if (person.location==='home' && person.activity?.type==='sleeping') {
+      const pos=assignedSleepPosition(this.state,person); if(pos){person.x=pos.x;person.y=pos.y;}
+    } else if (person.location==='home' && ['familyMeal','breakfast','lunch','dinner','eating'].includes(person.activity?.type)) {
+      const pos=assignedSeatPosition(this.state,person); if(pos){person.x=pos.x;person.y=pos.y;}
+    }
     const sittingActivities = new Set(['breakfast','lunch','dinner','eating','familyMeal','familyTime','conversation','relaxing','retirement','hobby','homework','study','childcare','playing']);
     const pose = person.activity?.type === 'sleeping' ? 'sleeping' : sittingActivities.has(person.activity?.type) ? 'sitting' : 'standing';
     const box = drawTopDownCharacter(this.ctx, person, this.animationClock, { highlight: isPlayer, pose });
@@ -521,6 +546,7 @@ export class Renderer {
     if (person.activity?.type === 'hobby' && person.activity?.hobbyId === 'painting') this.drawActivityBubble(person, '▤');
     this.drawNameTag(person, box.x, box.y - box.height / 2 - 5, isPlayer);
     this.personHitboxes.push({ id: person.id, x: box.x - box.width / 2, y: box.y - box.height / 2, w: box.width, h: box.height, person, clickable: clickable || !person.id.startsWith('resident-') });
+    person.x=original.x; person.y=original.y;
   }
 
   drawActivityBubble(person, symbol) {
@@ -561,7 +587,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(19,26,39,.72)';
       ctx.fillRect(16, 14, 240, 24);
       ctx.fillStyle = '#f7f2e7';
-      ctx.fillText(`${this.state.household.label.toUpperCase()} · ${this.state.household.home.layoutLabel.toUpperCase()} · ${formatTime(this.state.time.minute)}`, 25, 30);
+      ctx.fillText(`${this.state.household.label.toUpperCase()} · ${(this.state.household.home.currentFloor||0)===0?'GROUND FLOOR':'SECOND FLOOR'} · ${formatTime(this.state.time.minute)}`, 25, 30);
     }
   }
 

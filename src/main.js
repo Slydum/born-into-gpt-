@@ -134,6 +134,17 @@ newGameForm.addEventListener('submit', event => {
   event.preventDefault();
   clearLegacySaves();
   const nextState = createNewGame(nameInput.value, seedInput.value);
+  nextState.settings = {
+    ...nextState.settings,
+    lifeDifficulty: document.getElementById('lifeDifficultyInput')?.value || 'realistic',
+    seriousIllness: document.getElementById('seriousIllnessInput')?.value || 'rare',
+    unexpectedDeath: document.getElementById('unexpectedDeathInput')?.value || 'rare',
+    teenPregnancy: document.getElementById('teenPregnancyInput')?.value || 'rare',
+    cheating: document.getElementById('cheatingInput')?.value || 'rare',
+    substanceEvents: document.getElementById('substanceInput')?.value || 'mild',
+    teenRomance: document.getElementById('teenRomanceInput')?.value || 'age-appropriate',
+    adultIntimacy: document.getElementById('adultIntimacyInput')?.value || 'fade'
+  };
   startLife(nextState, true);
 });
 
@@ -239,5 +250,5 @@ requestAnimationFrame(frame);
 window.__BORN_INTO_READY__ = true;
 
 if (hasLegacySave() && !hasSave()) {
-  showStartupError('This update uses a new simulation save format. Begin a new life to use schedules, town residents, home expansion, and autonomous travel.');
+  showStartupError('V7 uses a new save format. Begin a new life to use assigned beds, second floors, persistent friendships, phones, adult siblings, move-outs, and life events.');
 }

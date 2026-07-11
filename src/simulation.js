@@ -15,6 +15,7 @@ import {
   getActivityPoint, getIndoorWaypoints, getSceneEntryPoint, getSceneExitPoint, getTownDoorPoint, locationLabel, nearestObject, residentScheduleLocation
 } from './world.js';
 import { evolveAppearance } from './art.js';
+import { V7LifeSystem, assignHomeSpaces, preferredHobbyRoom } from './v7.js';
 
 const PLAYER_YEAR_DAYS = 2;
 const GAME_MINUTES_PER_REAL_SECOND = 5;
@@ -64,6 +65,7 @@ export class Simulation {
     this.lastResidentTick = -999;
     this.lastFastSummaryStamp = nowGameStamp(state);
     this.ensureAgentsReady();
+    this.v7 = new V7LifeSystem(this);
   }
 
   ensureAgentsReady() {
@@ -100,6 +102,7 @@ export class Simulation {
     this.updatePregnancy();
     this.updateHomeProjects();
     this.updateSocialLife();
+    this.v7?.update();
     this.maybeFlushFastSummary();
     this.rng.state >>>= 0;
     this.state.rngState = this.rng.state;
@@ -127,6 +130,7 @@ export class Simulation {
     if (stamp - this.lastScheduleTick >= 10) {
       this.lastScheduleTick = stamp;
       this.evaluateScheduledChanges();
+      this.v7?.minuteTick();
     }
   }
 
@@ -150,6 +154,7 @@ export class Simulation {
     this.processBills();
     this.evaluateFamilyPlanning();
     this.maybeTriggerEvent();
+    this.v7?.dailyTick();
     this.log(`${dayName(state.time.totalDays)} begins.`, 'routine');
   }
 
@@ -175,6 +180,7 @@ export class Simulation {
   }
 
   handleStageChange(person, oldStage) {
+    this.v7?.onStageChange(person, oldStage);
     if (person.id === this.state.player.id) {
       person.crying = false;
       person.carriedBy = null;
@@ -195,7 +201,7 @@ export class Simulation {
         elder: ['The long view', 'Your schedule slows down, while family connections and health become more important.']
       };
       const copy = messages[person.stage];
-      if (copy) this.showEvent({ eyebrow: 'LIFE STAGE', title: copy[0], body: copy[1], choices: [{ label: 'Continue' }] });
+      if (copy && person.stage !== 'adult') this.showEvent({ eyebrow: 'LIFE STAGE', title: copy[0], body: copy[1], choices: [{ label: 'Continue' }] });
       this.notify(`You are now a ${person.stage}.`, 'important', `stage-${person.stage}`);
       this.log(`${person.name} entered the ${person.stage} stage.`, 'important');
     } else {
@@ -208,7 +214,7 @@ export class Simulation {
   updateNeeds(gameMinutes) {
     const state = this.state;
     for (const person of [state.player, ...state.siblings]) {
-      if (!person.alive) continue;
+      if (person.alive === false) continue;
       const rates = NEED_DECAY[person.stage] || NEED_DECAY.adult;
       person.needs.satiety = clamp(person.needs.satiety - gameMinutes * rates.satiety / 60);
       person.needs.energy = clamp(person.needs.energy - gameMinutes * rates.energy / 60);
@@ -265,7 +271,7 @@ export class Simulation {
   }
 
   updateSibling(sibling, realDt, gameMinutes) {
-    if (!sibling.alive) return;
+    if (!sibling.alive || sibling.movedOut) return;
     if (this.finishExpiredActivity(sibling)) return;
     if (sibling.route) {
       this.updateRoute(sibling, realDt);
@@ -375,10 +381,10 @@ export class Simulation {
         }
       }
     }
-    if (meal.phase === 'ready' && this.gameStamp - meal.readyStamp > 100) meal.phase = 'cleanup';
-    if (meal.phase === 'eating' && this.gameStamp - meal.readyStamp > 120) meal.phase = 'cleanup';
-    if (meal.phase === 'cleanup' && (home.chores.dirtyDishes || 0) <= 0) {
-      meal.phase = 'idle'; meal.type = null; meal.recipe = null; meal.ingredientUse = {}; meal.cookId = null; meal.attendees = []; meal.eatenIds = [];
+    // V7: food is visible only while served/eaten. Dishes are a separate chore and never block the next meal.
+    if (['ready','eating'].includes(meal.phase) && !meal.servedUntilStamp) meal.servedUntilStamp = meal.readyStamp + 95;
+    if (meal.phase === 'cleared' && this.gameStamp - (meal.clearedStamp || this.gameStamp) > 20) {
+      meal.phase = 'idle'; meal.type = null; meal.recipe = null; meal.ingredientUse = {}; meal.cookId = null; meal.attendees = []; meal.eatenIds = []; meal.servedUntilStamp = -1;
     }
     home.cleanliness = clamp(100 - ((home.chores.floorMess||0)*.35 + (home.chores.bathroomMess||0)*.25 + (home.chores.dirtyDishes||0)*1.4 + (home.chores.trash||0)*2.4));
   }
@@ -1039,7 +1045,7 @@ export class Simulation {
     this.state.household.food -= portionsNeeded;
     const pantry = home.kitchen.ingredients || {};
     for (const [ingredient, amount] of Object.entries(meal.ingredientUse || {})) pantry[ingredient] = Math.max(0, (pantry[ingredient] || 0) - amount);
-    meal.phase='ready'; meal.type=mealType||meal.type; meal.recipe=recipe||meal.recipe||'Home-cooked meal'; meal.readyStamp=this.gameStamp;
+    meal.phase='ready'; meal.type=mealType||meal.type; meal.recipe=recipe||meal.recipe||'Home-cooked meal'; meal.readyStamp=this.gameStamp; meal.servedUntilStamp=this.gameStamp+95; meal.clearedStamp=-1;
     meal.attendees=getAllFamily(this.state).filter(member=>member.location==='home'&&member.alive!==false&&member.stage!=='baby').map(member=>member.id);
     meal.eatenIds=[];
     home.kitchen.preparedMeal={name:meal.recipe,servings:Math.max(2,meal.attendees.length),cookedBy:person.id,stamp:this.gameStamp};
@@ -1062,7 +1068,7 @@ export class Simulation {
       if (person.id===this.state.player.id) this.state.player.development.bonding=clamp(this.state.player.development.bonding+1.5);
       if (this.rng.chance(.55)) this.performSocialInteraction(person);
     }
-    if (meal.eatenIds.length >= Math.max(1,meal.attendees.length)) meal.phase='cleanup';
+    if (meal.eatenIds.length >= Math.max(1,meal.attendees.length)) { meal.phase='cleared'; meal.clearedStamp=this.gameStamp; home.kitchen.preparedMeal=null; }
   }
 
   completeDishwashing(person) {
@@ -1072,7 +1078,7 @@ export class Simulation {
     person.needs.energy=clamp(person.needs.energy-(machine?3:7));
     person.needs.mood=clamp(person.needs.mood+2);
     this.addSpeech(person, machine?'Dishwasher is running.':'Dishes are done.');
-    if (home.chores.dirtyDishes<=0 && home.meal.phase==='cleanup') home.meal.phase='idle';
+    // Dirty dishes no longer keep an old meal permanently active.
   }
 
   completeLaundry(person) {
@@ -1126,9 +1132,16 @@ export class Simulation {
   completeHobby(person, hobbyId) {
     const hobby = hobbyById(hobbyId);
     const home=this.state.household.home;
+    person.hobbyPractice ||= {};
+    person.hobbyPractice[hobby.id] = (person.hobbyPractice[hobby.id] || 0) + 1;
     if (hobby.equipment && !hasFurniture(this.state,hobby.equipment) && !['stove','bookshelf','television'].includes(hobby.equipment)) {
-      this.notify(`${person.name.split(' ')[0]} needs ${purchaseById(hobby.equipment)?.label || 'equipment'} to practice ${hobby.label.toLowerCase()} at home.`,'routine',`missing-${hobby.equipment}`);
-      person.needs.mood=clamp(person.needs.mood+3); return;
+      // Before a family buys equipment, characters can use school/community/public options.
+      person.needs.mood=clamp(person.needs.mood+6);
+      person.skills ||= {}; person.skills[hobby.id]=(person.skills[hobby.id]||0)+.35;
+      if (person.hobbyPractice[hobby.id] < 5) {
+        this.notify(`${person.name.split(' ')[0]} practiced ${hobby.label.toLowerCase()} using borrowed or public equipment.`,'routine',`public-${person.id}-${hobby.id}`);
+        return;
+      }
     }
     if (hobby.cost && this.state.household.money >= hobby.cost) this.recordExpense(hobby.cost, hobby.label);
     person.needs.mood = clamp(person.needs.mood + hobby.mood);
@@ -1198,6 +1211,7 @@ export class Simulation {
     const add = (id, bonus = 0, reason = '') => {
       if (existing.has(id) || hasFurniture(this.state, id) || home.deliveries.some(delivery => delivery.id === id)) return;
       if (id === 'teenBedroom' && (roomExists(this.state, 'teenBedroom') || home.construction?.id === 'teenBedroom')) return;
+      if (id === 'secondFloor' && (home.floors?.some(floor=>floor.id===1&&floor.active) || home.construction?.id === 'secondFloor')) return;
       const item = purchaseById(id);
       if (!item) return;
       home.wishlist.push({ ...item, priority: item.priority + bonus, reason });
@@ -1212,7 +1226,9 @@ export class Simulation {
     }
     const householdChildren = [this.state.player, ...this.state.siblings];
     if (householdChildren.some(child => child.stage === 'teen')) {
-      add('teenBedroom', 25, 'A teenager in the household needs privacy and space.');
+      const upstairsActive=home.floors?.some(floor=>floor.id===1&&floor.active);
+      if (!upstairsActive && this.state.household.tier >= 3 && householdChildren.length >= 3) add('secondFloor',35,'The family needs more bedrooms and a proper hobby room.');
+      else add('teenBedroom', 25, 'A teenager in the household needs privacy and space.');
     }
     if (this.state.siblings.some(sibling => ['toddler', 'child', 'teen'].includes(sibling.stage))) add('siblingBed', 15, 'A sibling needs a proper bed.');
     if (!hasFurniture(this.state, 'sofa') && this.state.household.tier >= 2) add('sofa', 0, 'The family wants a comfortable living room.');
@@ -1224,8 +1240,19 @@ export class Simulation {
     if (!home.wallPaint && this.state.household.money > 1600 && !existing.has('paint')) add('paint');
     if (!hasFurniture(this.state,'washingMachine') && (home.chores.laundryLoads||0)>=2 && this.state.household.tier>=3) add('washingMachine',12,'Laundry is taking too much time by hand.');
     if (!hasFurniture(this.state,'dishwasher') && (home.chores.dirtyDishes||0)>=8 && this.state.household.tier>=4) add('dishwasher',8,'The family wants help with daily dishes.');
-    const hobbyIds=new Set([...this.state.parents,...this.state.siblings,this.state.player].flatMap(person=>person.hobbies||[]));
-    for(const hobbyId of hobbyIds){const hobby=hobbyById(hobbyId);if(hobby?.equipment && purchaseById(hobby.equipment)) add(hobby.equipment, Math.round((this.state.parents.some(p=>(p.hobbies||[]).includes(hobbyId))?10:0)), `Someone in the household enjoys ${hobby.label.toLowerCase()}.`);}
+    const hobbyPeople=[...this.state.parents,...this.state.siblings,this.state.player].filter(person=>!person.movedOut);
+    for (const person of hobbyPeople) {
+      for (const hobbyId of person.hobbies || []) {
+        const hobby=hobbyById(hobbyId);
+        const sessions=person.hobbyPractice?.[hobbyId] || 0;
+        if (!hobby?.equipment || !purchaseById(hobby.equipment) || sessions < 5) continue;
+        const roomId=preferredHobbyRoom(this.state,person,hobbyId);
+        if (home.furniture.some(item=>item.id===hobby.equipment && item.ownerId===person.id)) continue;
+        add(hobby.equipment, Math.min(18,sessions), `${person.name.split(' ')[0]} has practiced ${hobby.label.toLowerCase()} ${sessions} times and wants equipment for ${roomId}.`);
+        const wish=home.wishlist.find(item=>item.id===hobby.equipment);
+        if (wish) { wish.ownerId=person.id; wish.room=roomId; }
+      }
+    }
     home.wishlist.sort((a, b) => b.priority - a.priority);
   }
 
@@ -1235,13 +1262,14 @@ export class Simulation {
     if (!item || this.state.household.money < item.cost) return;
     this.recordExpense(item.cost, item.label);
     home.wishlist = home.wishlist.filter(entry => entry.id !== id);
-    if (id === 'teenBedroom') {
-      home.construction = { id, label: item.label, roomId:'teenBedroom', startedDay: Math.floor(this.state.time.totalDays), startedStamp:this.gameStamp, dueDay: Math.floor(this.state.time.totalDays) + (item.constructionDays || 4), progress: 0, status:'building', paid:item.cost };
-      this.notify(`${parent.name.split(' ')[0]} arranged a bedroom extension. Construction will take several days.`, 'important', 'teen-room-start');
-      this.log('The household began building a teen bedroom.', 'important');
+    if (id === 'teenBedroom' || id === 'secondFloor') {
+      const isSecond=id==='secondFloor';
+      home.construction = { id, label: item.label, roomId:isSecond?'upperLanding':'teenBedroom', floor:isSecond?1:0, startedDay: Math.floor(this.state.time.totalDays), startedStamp:this.gameStamp, dueDay: Math.floor(this.state.time.totalDays) + (item.constructionDays || 4), progress: 0, status:'building', paid:item.cost };
+      this.notify(`${parent.name.split(' ')[0]} arranged ${isSecond?'a second-floor addition':'a bedroom extension'}. Construction will take several days.`, 'important', `${id}-start`);
+      this.log(`The household began building ${item.label}.`, 'important');
       return;
     }
-    home.deliveries.push({ id, room: item.room, label: item.label, dueDay: Math.floor(this.state.time.totalDays) + 1 });
+    home.deliveries.push({ id, room: item.room === 'ownerBedroom' ? (item.ownerId ? (getPersonById(this.state,item.ownerId)?.assignedRoomId || 'childBedroom') : 'childBedroom') : item.room, ownerId:item.ownerId || null, label: item.label, dueDay: Math.floor(this.state.time.totalDays) + 1 });
     home.purchaseHistory.push({ id, day: Math.floor(this.state.time.totalDays), cost: item.cost, buyer: parent.id });
     this.notify(`${parent.name.split(' ')[0]} ordered a ${item.label}.`, 'important', `purchase-${id}`);
   }
@@ -1261,7 +1289,10 @@ export class Simulation {
         if (delivery.id === 'siblingBed') activateRoom(this.state, 'childBedroom');
         if (delivery.id === 'diningSet') home.furniture = home.furniture.filter(item => item.id !== 'basicTable');
         addFurniture(this.state, delivery.id, delivery.room);
+        const deliveredItem=[...home.furniture].reverse().find(entry=>entry.id===delivery.id);
+        if (deliveredItem) { deliveredItem.ownerId=delivery.ownerId || null; deliveredItem.floor=home.rooms.find(room=>room.id===delivery.room)?.floor || 0; }
         if (purchaseById(delivery.id)?.hobby && !home.hobbies.equipment.includes(delivery.id)) home.hobbies.equipment.push(delivery.id);
+        if (delivery.ownerId) home.hobbyOwnership[delivery.id]=delivery.ownerId;
       }
       home.deliveries.splice(home.deliveries.indexOf(delivery), 1);
       this.notify(`The ${delivery.label} was delivered and placed in the correct room.`, 'important', `delivery-${delivery.id}`);
@@ -1271,21 +1302,28 @@ export class Simulation {
       const span = Math.max(1, home.construction.dueDay - home.construction.startedDay);
       home.construction.progress = clamp(((this.state.time.totalDays - home.construction.startedDay) / span) * 100);
       if (day >= home.construction.dueDay) {
-        const plan=home.expansionPlan;
-        if(plan?.shrink){const roomToShrink=home.rooms.find(item=>item.id===plan.shrink.roomId);if(roomToShrink)Object.assign(roomToShrink,plan.shrink);}
-        activateRoom(this.state, 'teenBedroom');
-        const teen=[this.state.player,...this.state.siblings].find(child=>child.stage==='teen');
-        if (teen) {
-          let bed=home.furniture.find(item=>item.id==='childBed');
-          if(!bed){addFurniture(this.state,'childBed','teenBedroom');bed=home.furniture.find(item=>item.id==='childBed');}
-          if(bed)bed.room='teenBedroom';
-          const desk=home.furniture.find(item=>item.id==='studyDesk');if(desk)desk.room='teenBedroom';
+        const completed={...home.construction,status:'complete',completedDay:day};
+        if (home.construction.id==='secondFloor') {
+          this.v7.completeSecondFloor();
+          this.state.family.history.unshift(`A second floor was completed on day ${day+1}.`);
+        } else {
+          const plan=home.expansionPlan;
+          if(plan?.shrink){const roomToShrink=home.rooms.find(item=>item.id===plan.shrink.roomId);if(roomToShrink)Object.assign(roomToShrink,plan.shrink);}
+          activateRoom(this.state, 'teenBedroom');
+          const teen=[this.state.player,...this.state.siblings].find(child=>child.stage==='teen'&&!child.movedOut);
+          if (teen) {
+            addFurniture(this.state,'teenBed','teenBedroom');
+            const bed=[...home.furniture].reverse().find(item=>item.id==='teenBed'); if (bed) bed.ownerId=teen.id;
+            const desk=home.furniture.find(item=>item.id==='studyDesk');if(desk){desk.room='teenBedroom';desk.floor=0;desk.ownerId=teen.id;}
+            teen.assignedRoomId='teenBedroom'; teen.assignedBedId='teenBed';
+          }
+          this.state.family.history.unshift(`A teen bedroom was completed on day ${day+1}.`);
+          this.notify('The new teen bedroom is complete.', 'important', 'teen-room-complete');
         }
-        home.construction.status='complete'; home.construction.completedDay=day;
-        this.state.family.history.unshift(`A teen bedroom was completed on day ${day+1}.`);
+        home.constructionHistory ||= []; home.constructionHistory.unshift(completed);
         home.construction = null;
-        this.notify('The new teen bedroom is complete.', 'important', 'teen-room-complete');
-        this.showEvent({ eyebrow: 'HOME EXPANSION', title: 'A room of your own', body: 'Construction is finished. Your bed and study area have been moved into a private bedroom.', choices: [{ label: 'See the new room' }] });
+        assignHomeSpaces(this.state);
+        this.showEvent({ eyebrow: 'HOME EXPANSION', title: completed.id==='secondFloor'?'A whole new floor':'A room of your own', body: completed.id==='secondFloor'?'Construction is finished. Two bedrooms, a bathroom, and a hobby room are now upstairs.':'Construction is finished. The bedroom has a reachable bed and study area.', choices: [{ label: 'See the finished home' }] });
       }
     }
   }
@@ -1517,6 +1555,9 @@ export class Simulation {
       return;
     }
     switch (object.type) {
+      case 'stairs':
+        if (this.v7.changeFloor(object.targetFloor)) { player.floor=object.targetFloor; const stair=this.state.household.home.stairs[object.targetFloor===0?'ground':'upper']; player.x=stair.x*TILE+24; player.y=stair.y*TILE; this.notify(object.targetFloor===1?'You went upstairs.':'You went downstairs.','routine','floor-change'); }
+        break;
       case 'exit':
         this.teleportThroughDoor('town');
         break;
@@ -1675,6 +1716,22 @@ export class Simulation {
     if (stage === 'teen') return [{ id: 'school', label: 'Go to school', activity: 'school' }, { id: 'workplace', label: 'Part-time work', activity: 'partTimeWork' }, ...common, { id: 'grocery', label: 'Grocery store', activity: 'shopping' }];
     if (stage === 'adult' || stage === 'elder') return [{ id: 'workplace', label: 'Go to work', activity: 'working' }, { id: 'grocery', label: 'Buy groceries', activity: 'shopping' }, { id: 'furniture', label: 'Furniture store', activity: 'furnitureShopping' }, ...common];
     return [];
+  }
+
+  sendPhoneMessage(contactId, kind = 'hello') {
+    return this.v7.sendMessage(contactId, kind);
+  }
+
+  inviteContact(contactId) {
+    return this.v7.invite(contactId);
+  }
+
+  changeHomeFloor(floor) {
+    return this.v7.changeFloor(Number(floor));
+  }
+
+  requestSecondFloor() {
+    return this.v7.requestSecondFloor();
   }
 
   setSpeed(index) {

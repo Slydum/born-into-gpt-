@@ -2,6 +2,7 @@ import { TILE, CANVAS_WIDTH, CANVAS_HEIGHT, SCENE_ENTRY, LOCATION_LABELS } from 
 import { getFurnitureAnchor, getActiveRooms, hasFurniture } from './state.js';
 export { getActiveRooms } from './state.js';
 import { clamp, seededPhase, stageForAge } from './utils.js';
+import { assignedSleepPosition, assignedSeatPosition, preferredHobbyRoom, v7PersonById } from './v7.js';
 
 export function getLocation(state, type) {
   return state.town.locations.find(location => location.type === type) || null;
@@ -40,7 +41,7 @@ export function getYoungestChild(state) {
 }
 
 export function getPersonById(state, id) {
-  return getAllFamily(state).find(person => person.id === id) || state.town.residents.find(person => person.id === id) || null;
+  return v7PersonById(state, id);
 }
 
 export function getDependents(state) {
@@ -50,7 +51,7 @@ export function getDependents(state) {
 
 export function getFurnitureRects(state) {
   return state.household.home.furniture
-    .filter(item => item.delivered !== false)
+    .filter(item => item.delivered !== false && (item.floor ?? 0) === (state.household.home.currentFloor ?? 0))
     .map(item => {
       const anchor = getFurnitureAnchor(state, item);
       return {
@@ -74,17 +75,22 @@ export function getSceneObjects(state, scene = state.scene) {
   if (scene === 'home') {
     const items = getFurnitureRects(state).map(item => {
       const labels = {
-        parentBed: 'Rest in bed', crib: 'Check the crib', toddlerBed: 'Rest in your toddler bed', childBed: 'Rest in your bed', siblingBed: 'Sibling bed',
+        parentBed: 'Rest in bed', crib: 'Check the crib', toddlerBed: 'Rest in your toddler bed', childBed: 'Rest in your bed', siblingBed: 'Sibling bed', teenBed:'Rest in your bed', upperBedA:'Rest in your bed', upperBedB:'Rest in your bed', nannyBed:'Rest in bed',
         fridge: 'Check ingredients', stove: 'Cook a meal', basicTable: 'Sit at the table', diningSet: 'Sit at the dining table',
         sofa: 'Relax on the sofa', television: 'Watch television', bookshelf: 'Read a book', studyDesk: 'Study at your desk', plant: 'Water the plant', rug: 'Sit on the rug', toilet: 'Use the bathroom', sink: 'Wash up', shower: 'Take a shower', laundryBasket: 'Sort laundry', washingMachine: 'Wash laundry', dishRack: 'Wash dishes', dishwasher: 'Run the dishwasher', exerciseMat: 'Exercise', dumbbells: 'Lift weights', easel: 'Paint', keyboard: 'Practice music', sewingKit: 'Sew', gardenKit: 'Garden', gameConsole: 'Play games'
       };
       const types = {
-        parentBed: 'bed', crib: 'crib', toddlerBed: 'bed', childBed: 'bed', siblingBed: 'bed', fridge: 'fridge', stove: 'stove',
+        parentBed: 'bed', crib: 'crib', toddlerBed: 'bed', childBed: 'bed', siblingBed: 'bed', teenBed:'bed', upperBedA:'bed', upperBedB:'bed', nannyBed:'bed', fridge: 'fridge', stove: 'stove',
         basicTable: 'table', diningSet: 'table', sofa: 'sofa', television: 'television', bookshelf: 'book', studyDesk: 'study', plant: 'plant', rug: 'rug', toilet: 'bathroom', sink: 'bathroom', shower: 'bathroom', laundryBasket: 'laundry', washingMachine: 'laundry', dishRack: 'dishes', dishwasher: 'dishes', exerciseMat: 'exercise', dumbbells: 'exercise', easel: 'painting', keyboard: 'music', sewingKit: 'sewing', gardenKit: 'gardening', gameConsole: 'gaming'
       };
       return { id: item.id, type: types[item.id] || 'furniture', label: labels[item.id] || item.id, x: item.x + item.w / 2, y: item.y + item.h / 2, w: item.w, h: item.h, solid: !['rug', 'plant'].includes(item.id) };
     });
-    items.push({ id: 'home-exit', type: 'exit', label: 'Go into town', x: 11.5 * TILE, y: 16.6 * TILE, w: TILE, h: TILE, solid: false });
+    if (state.household.home.stairs?.active) {
+      const floor = state.household.home.currentFloor || 0;
+      const stair = floor === 0 ? state.household.home.stairs.ground : state.household.home.stairs.upper;
+      items.push({ id:'stairs', type:'stairs', targetFloor:floor===0?1:0, label:floor===0?'Go upstairs':'Go downstairs', x:stair.x*TILE, y:stair.y*TILE, w:TILE, h:TILE, solid:false });
+    }
+    if ((state.household.home.currentFloor || 0) === 0) items.push({ id: 'home-exit', type: 'exit', label: 'Go into town', x: 11.5 * TILE, y: 16.6 * TILE, w: TILE, h: TILE, solid: false });
     return items;
   }
 
@@ -159,13 +165,13 @@ export function getActivityPoint(state, person, activityType, goal = {}) {
     if (target?.location === 'home') return findSafePoint(state, 'home', { x: target.x + 28, y: target.y + 8 });
   }
   if (activityType === 'sleeping') {
-    if (person.role === 'Nanny') return furniturePoint(person.liveIn ? ['sofa','childBed'] : 'sofa','livingRoom');
-    if (person.role === 'Parent') return furniturePoint('parentBed','parentBedroom', state.parents.findIndex(item => item.id === person.id) ? 15 : -15);
-    if (person.id === state.player.id && person.stage === 'baby') return furniturePoint('crib','parentBedroom');
-    const siblingIndex = state.siblings.findIndex(item => item.id === person.id);
-    return furniturePoint(siblingIndex % 2 === 0 ? ['childBed','toddlerBed'] : ['siblingBed','childBed'],'childBedroom');
+    const assigned = assignedSleepPosition(state, person);
+    if (assigned) return assigned;
+    return furniturePoint(['parentBed','childBed','siblingBed','sofa'],'livingRoom');
   }
-  if (['breakfast','lunch','dinner','eating','familyMeal'].includes(activityType)) return furniturePoint(['diningSet','basicTable'],'diningRoom',28);
+  if (['breakfast','lunch','dinner','eating','familyMeal'].includes(activityType)) {
+    return assignedSeatPosition(state, person) || furniturePoint(['diningSet','basicTable'],'diningRoom',28);
+  }
   if (activityType === 'cooking') return furniturePoint('stove','kitchen');
   if (activityType === 'shopping') return furniturePoint('fridge','kitchen');
   if (activityType === 'washDishes') return furniturePoint(['dishwasher','dishRack','sink'],'kitchen');
@@ -174,11 +180,18 @@ export function getActivityPoint(state, person, activityType, goal = {}) {
   if (activityType === 'cleanBathroom') return furniturePoint('sink','bathroom');
   if (activityType === 'cleaning') return roomCenter(goal.roomId || 'livingRoom');
   if (activityType === 'repairing') return roomCenter('kitchen');
-  if (['homework','study','remoteWork'].includes(activityType)) return furniturePoint('studyDesk','childBedroom');
+  if (['homework','study','remoteWork'].includes(activityType)) return furniturePoint('studyDesk',person.assignedRoomId || 'childBedroom');
   if (activityType === 'familyTime' || activityType === 'conversation') return furniturePoint(['sofa','rug'],'livingRoom',28);
   if (activityType === 'hobby') {
     const map = { cooking:'stove', reading:'bookshelf', sewing:'sewingKit', television:'television', gaming:'gameConsole', exercise:['exerciseMat','dumbbells'], painting:'easel', music:'keyboard', gardening:['gardenKit','plant'] };
-    return furniturePoint(map[goal.hobbyId] || ['sofa','rug'],'livingRoom',25);
+    const room = preferredHobbyRoom(state,person,goal.hobbyId);
+    const owned = getSceneObjects(state,'home').find(item => {
+      if (!([].concat(map[goal.hobbyId] || [])).includes(item.id)) return false;
+      const furniture = state.household.home.furniture.find(entry => entry.id === item.id && entry.room === room && (entry.ownerId === person.id || !entry.ownerId));
+      return Boolean(furniture);
+    });
+    if (owned) return findSafePoint(state,'home',{x:owned.x,y:owned.y+Math.max(20,owned.h/2+10)});
+    return furniturePoint(map[goal.hobbyId] || ['sofa','rug'],room,25);
   }
   if (activityType === 'exploring') {
     const rooms = getActiveRooms(state).filter(room => room.id !== 'bathroom' || person.stage !== 'baby');

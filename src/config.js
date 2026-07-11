@@ -3,9 +3,9 @@ export const COLS = 22;
 export const ROWS = 18;
 export const CANVAS_WIDTH = COLS * TILE;
 export const CANVAS_HEIGHT = ROWS * TILE;
-export const SAVE_KEY = 'born-into-save-v6';
-export const LEGACY_SAVE_KEYS = ['born-into-save-v5', 'born-into-save-v4', 'born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
-export const SAVE_VERSION = 6;
+export const SAVE_KEY = 'born-into-save-v7';
+export const LEGACY_SAVE_KEYS = ['born-into-save-v6', 'born-into-save-v5', 'born-into-save-v4', 'born-into-save-v3', 'born-into-save-v2', 'born-into-save'];
+export const SAVE_VERSION = 7;
 export const SPEEDS = [1, 3, 8];
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const WEEKDAY_COUNT = 5;
@@ -117,13 +117,16 @@ export const HOUSE_PURCHASES = [
   { id: 'paint', label: 'fresh wall paint', cost: 230, priority: 30, room: 'wholeHouse' },
   { id: 'washingMachine', label: 'washing machine', cost: 520, priority: 60, room: 'bathroom' },
   { id: 'dishwasher', label: 'dishwasher', cost: 610, priority: 42, room: 'kitchen' },
-  { id: 'exerciseMat', label: 'exercise mat', cost: 90, priority: 26, room: 'livingRoom', hobby: 'exercise' },
-  { id: 'dumbbells', label: 'dumbbells', cost: 220, priority: 22, room: 'livingRoom', hobby: 'exercise' },
-  { id: 'easel', label: 'painting easel and supplies', cost: 260, priority: 30, room: 'livingRoom', hobby: 'painting' },
-  { id: 'keyboard', label: 'music keyboard', cost: 480, priority: 22, room: 'livingRoom', hobby: 'music' },
-  { id: 'sewingKit', label: 'sewing kit', cost: 170, priority: 22, room: 'livingRoom', hobby: 'sewing' },
-  { id: 'gardenKit', label: 'gardening kit', cost: 150, priority: 20, room: 'livingRoom', hobby: 'gardening' },
-  { id: 'gameConsole', label: 'game console', cost: 720, priority: 15, room: 'livingRoom', hobby: 'gaming' }
+  { id: 'exerciseMat', label: 'exercise mat', cost: 90, priority: 26, room: 'ownerBedroom', hobby: 'exercise' },
+  { id: 'dumbbells', label: 'dumbbells', cost: 220, priority: 22, room: 'ownerBedroom', hobby: 'exercise' },
+  { id: 'easel', label: 'painting easel and supplies', cost: 260, priority: 30, room: 'ownerBedroom', hobby: 'painting' },
+  { id: 'keyboard', label: 'music keyboard', cost: 480, priority: 22, room: 'ownerBedroom', hobby: 'music' },
+  { id: 'sewingKit', label: 'sewing kit', cost: 170, priority: 22, room: 'ownerBedroom', hobby: 'sewing' },
+  { id: 'gardenKit', label: 'indoor gardening kit', cost: 150, priority: 20, room: 'ownerBedroom', hobby: 'gardening' },
+  { id: 'gameConsole', label: 'game console', cost: 720, priority: 15, room: 'ownerBedroom', hobby: 'gaming' },
+  { id: 'secondFloor', label: 'second-floor addition', cost: 4200, priority: 125, requiredStage: 'teen', room: 'upperLanding', constructionDays: 8 },
+  { id: 'roomDivider', label: 'bedroom room divider', cost: 180, priority: 78, room: 'childBedroom' },
+  { id: 'highChair', label: 'high chair', cost: 115, priority: 88, requiredStage: 'toddler', room: 'diningRoom' }
 ];
 
 export const HOME_ANCHORS = {

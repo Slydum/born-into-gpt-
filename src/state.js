@@ -7,6 +7,7 @@ import {
   RNG, clamp, stageForAge, storageGet, storageSet, storageRemove, safeText, deepClone
 } from './utils.js';
 import { createAppearance } from './art.js';
+import { initializeV7State, assignHomeSpaces } from './v7.js';
 
 function createTraits(rng) {
   return {
@@ -54,7 +55,7 @@ export function createParent(rng, index, familyName, parentCount) {
     id: `parent-${rng.int(100000, 999999)}-${index}`,
     name: `${rng.pick(NAMES.adult)} ${familyName}`,
     role: 'Parent',
-    age: rng.int(23, 40),
+    age: rng.int(27, 58),
     stage: 'adult',
     traits,
     revealedTraits: Object.keys(traits),
@@ -147,8 +148,8 @@ function room(id, label, x, y, w, h, active = true, door = null) {
   return { id, label, x, y, w, h, active, door: door || { x: x + w / 2, y: y + h - 0.05, edge: 'bottom' } };
 }
 
-function furniture(id, roomId, essential = false, condition = 100) {
-  return { id, room: roomId, essential, condition, delivered: true };
+function furniture(id, roomId, essential = false, condition = 100, ownerId = null) {
+  return { id, instanceId: `${id}-${roomId}-${Math.floor(Math.random()*1e7)}`, room: roomId, floor: 0, ownerId, essential, condition, delivered: true };
 }
 
 const HOME_LAYOUTS = [
@@ -208,6 +209,7 @@ const HOME_LAYOUTS = [
 
 export function buildHome(rng, wealth, existingChildren = 0) {
   const template = deepClone(rng.pick(HOME_LAYOUTS));
+  template.rooms.forEach(roomItem => { roomItem.floor = 0; });
   const hasSofa = wealth.tier >= 2;
   const hasRug = wealth.tier >= 3;
   const hasBookshelf = wealth.tier >= 3;
@@ -230,7 +232,7 @@ export function buildHome(rng, wealth, existingChildren = 0) {
   if (hasTelevision) items.push(furniture('television','livingRoom'));
   if (wealth.tier >= 4) items.push(furniture('washingMachine','bathroom'));
   return {
-    layoutId: template.id, layoutLabel: template.label, entrance: template.entrance, expansionPlan: template.expansion,
+    layoutId: template.id, layoutLabel: template.label, entrance: template.entrance, expansionPlan: template.expansion, currentFloor: 0, floors: [{id:0,label:'Ground Floor',active:true},{id:1,label:'Second Floor',active:false}],
     tier: wealth.tier, label: wealth.label, condition: rng.int(58,94), cleanliness: rng.int(48,90), decorLevel: Math.max(0,wealth.tier-2),
     wallPaint: wealth.tier >= 4, rooms: template.rooms, furniture: items, wishlist: [], deliveries: [], construction: null,
     purchaseHistory: [], lastEvaluationDay: -1,
@@ -238,7 +240,7 @@ export function buildHome(rng, wealth, existingChildren = 0) {
     chores: { dirtyDishes: 0, laundryLoads: rng.int(0,2), trash: rng.int(0,2), floorMess: rng.int(5,25), bathroomMess: rng.int(5,20), lastLaundryDay: -1 },
     meal: { phase: 'idle', type: null, recipe: null, ingredientUse: {}, cookId: null, startedStamp: -1, readyStamp: -1, attendees: [], seats: {}, conversations: 0 },
     hobbies: { equipment: items.filter(item => ['bookshelf','television'].includes(item.id)).map(item => item.id), artworks: [], crafts: [], lastSaleDay: -1 },
-    speech: []
+    speech: [], roomAssignments: {}, bedAssignments: {}, seatAssignments: {}, pendingRequests: [], constructionHistory: [], hobbyOwnership: {}, stairs: {ground:{x:10.7,y:8.5},upper:{x:10.7,y:8.5},active:false}
   };
 }
 
@@ -338,9 +340,11 @@ export function generateResidents(rng, town, count = 30) {
 }
 
 function createExistingSibling(rng, familyName, index, familyHint, age = null) {
-  const resolvedAge = age ?? rng.int(2, 16);
+  const resolvedAge = age ?? rng.int(2, 28);
   const stage = stageForAge(resolvedAge);
   const traitSeeds = createTraits(rng);
+  const adultPath = stage === 'adult' ? rng.pick(['college','work','trade']) : null;
+  const movedOut = stage === 'adult' ? rng.chance(0.78) : false;
   return {
     id: `sibling-${rng.int(100000, 999999)}-${index}`,
     name: `${rng.pick(NAMES.first)} ${familyName}`,
@@ -350,9 +354,11 @@ function createExistingSibling(rng, familyName, index, familyHint, age = null) {
     appearance: createAppearance(rng, stage, familyHint, 'Sibling'),
     development: { bonding: rng.int(35,70), stimulation: rng.int(35,70), stressExposure: rng.int(5,35), curiosity: rng.int(25,75), resilience: rng.int(25,75), grades: rng.int(40,80) },
     needs: { health:rng.int(80,98), energy:rng.int(55,90), satiety:rng.int(55,90), hygiene:rng.int(55,90), comfort:rng.int(50,90), mood:rng.int(45,90), stress:rng.int(5,35) },
-    location:'home', x:(10.5+(index%2)*2.2)*TILE, y:(3+Math.floor(index/2)*2)*TILE,
+    location:movedOut?'away':'home', x:(10.5+(index%2)*2.2)*TILE, y:(3+Math.floor(index/2)*2)*TILE,
     dir:'down', moving:false, currentGoal:null, activity:{type:'waiting',remaining:1,startedStamp:0}, route:null,
-    school:{attendedDay:-1,grades:rng.int(42,78)}, relationships:[], alive:true
+    school:{attendedDay:-1,grades:rng.int(42,88)}, relationships:[], alive:true,
+    movedOut, adultPath, residence:movedOut ? ({college:'University dormitory',work:'Shared apartment',trade:'Boarding house'}[adultPath]) : 'Family home',
+    partner:null, children:[], phone:{hasPhone:stage==='adult',contacts:[],unread:0}, memories:[]
   };
 }
 
@@ -439,28 +445,38 @@ function createInitialState(playerName, seed) {
   const parents = Array.from({ length: parentCount }, (_, index) => createParent(rng, index, familyName, parentCount));
   const wealth = wealthFromParents(rng, parents);
   const familyHint = parents[0]?.appearance || null;
-  const olderCount = rng.weighted([0, 1, 2, 3], value => [50, 29, 15, 6][value]);
-  const olderSiblings = Array.from({ length: olderCount }, (_, index) => createExistingSibling(rng, familyName, index, familyHint, Math.max(2, rng.int(2 + index * 2, 15))));
+  const olderCount = rng.weighted([0, 1, 2, 3, 4, 5], value => [34, 27, 18, 11, 7, 3][value]);
+  const maxOlderAge = Math.max(1, Math.min(34, Math.floor(Math.min(...parents.map(parent => parent.age)) - 16)));
+  const ages = [];
+  for (let index = 0; index < olderCount; index += 1) {
+    const minAge = Math.min(maxOlderAge, 1 + index * 2);
+    ages.push(rng.int(minAge, Math.max(minAge, maxOlderAge)));
+  }
+  ages.sort((a,b) => b-a);
+  const allOlderSiblings = ages.map((age, index) => createExistingSibling(rng, familyName, index, familyHint, age));
   const twinCount = rng.chance(0.08) ? 1 : 0;
   const twinSiblings = Array.from({ length: twinCount }, (_, index) => createExistingSibling(rng, familyName, olderCount + index, familyHint, 0));
+  const extendedFamily = allOlderSiblings.filter(item => item.movedOut);
+  const olderSiblings = allOlderSiblings.filter(item => !item.movedOut);
   const siblings = [...olderSiblings, ...twinSiblings];
   const player = createPlayer(rng, playerName, familyName);
   player.appearance = createAppearance(rng, 'baby', familyHint, 'Player');
   player.hobbies = selectHobbies(rng, player.traitSeeds, 2);
   const town = generateTown(rng);
   generateResidents(rng, town, rng.int(30, 38));
-  const home = buildHome(rng, wealth, olderSiblings.length);
+  const home = buildHome(rng, wealth, siblings.filter(item => !item.movedOut).length);
   const averageFamilyFocus = parents.reduce((sum, parent) => sum + parent.traits.familyFocus, 0) / parents.length;
-  const currentChildren = siblings.length + 1;
+  const currentChildren = allOlderSiblings.length + twinSiblings.length + 1;
   const desiredChildren = parentCount === 2
     ? clamp(Math.max(currentChildren, 1 + Math.round((averageFamilyFocus - 22) / 27)), currentChildren, 5)
     : currentChildren;
   const birthOrder = describeBirthOrder(olderCount, twinCount, desiredChildren);
   const childcareDecision = chooseInitialChildcare(rng, parents, wealth, familyName, familyHint);
   placeInitialHousehold(home, player, parents, siblings, childcareDecision.nanny);
-  const childrenIds = [player.id, ...siblings.map(item => item.id)];
+  const childrenIds = [player.id, ...siblings.map(item => item.id), ...extendedFamily.map(item => item.id)];
   const parentSummary = parents.map(parent => `${parent.name.split(' ')[0]} is ${parent.job.label.toLowerCase()}`).join(' and ');
-  const siblingSummary = siblings.length ? siblings.map(item => `${item.name.split(' ')[0]} (${item.age < 1 ? 'newborn twin' : `${Math.floor(item.age)} years old`})`).join(', ') : 'no siblings yet';
+  const allSiblingsAtBirth = [...allOlderSiblings, ...twinSiblings];
+  const siblingSummary = allSiblingsAtBirth.length ? allSiblingsAtBirth.map(item => `${item.name.split(' ')[0]} (${item.age < 1 ? 'newborn twin' : `${Math.floor(item.age)} years old`}${item.movedOut ? `, living in a ${item.residence.toLowerCase()}` : ', living at home'})`).join(', ') : 'no siblings yet';
   const intro = {
     birthTitle: `You are ${player.name}`,
     birthBody: `You were born on Monday, Week 1, into the ${familyName} family. You begin life as the ${birthOrder.label.toLowerCase()}.`,
@@ -469,10 +485,10 @@ function createInitialState(playerName, seed) {
     homeTitle: `Your first home`,
     homeBody: `The family lives in a ${wealth.label.toLowerCase()} home in ${town.name}. It begins with ${wealth.money.toLocaleString('en-PH')} pesos, ${wealth.food} food portions, and ${home.rooms.filter(roomItem => roomItem.active).map(roomItem => roomItem.label.toLowerCase()).join(', ')}.`
   };
-  return {
+  const state = {
     version: SAVE_VERSION, seed: String(seed), rngState: rng.state, createdAt: Date.now(),
     time: { totalDays: 0, day: 1, minute: 7 * 60, ageClock: 0, lastSummaryMinute: 7 * 60 },
-    speedIndex: 0, scene: 'home', player, parents, siblings, nanny: childcareDecision.nanny,
+    speedIndex: 0, scene: 'home', player, parents, siblings, extendedFamily, nanny: childcareDecision.nanny,
     family: {
       relationship: parentCount === 2 ? { affection: rng.int(42, 88), trust: rng.int(40, 90), tension: rng.int(5, 42) } : null,
       desiredChildren, pregnancy: null, planningCooldownUntil: 5, lastPlanningCheck: -1,
@@ -486,18 +502,24 @@ function createInitialState(playerName, seed) {
     town,
     familyTree: [
       ...parents.map(parent => ({ id: parent.id, name: parent.name, generation: 0, parentIds: [], children: childrenIds, alive: true })),
-      ...siblings.map(sibling => ({ id: sibling.id, name: sibling.name, generation: 1, parentIds: parents.map(parent => parent.id), children: [], alive: true })),
+      ...siblings.map(sibling => ({ id: sibling.id, name: sibling.name, generation: 1, parentIds: parents.map(parent => parent.id), children: sibling.children || [], alive: true })),
+      ...extendedFamily.map(sibling => ({ id: sibling.id, name: sibling.name, generation: 1, parentIds: parents.map(parent => parent.id), children: sibling.children || [], alive: true })),
       { id: player.id, name: player.name, generation: 1, parentIds: parents.map(parent => parent.id), children: [], alive: true }
     ],
-    social: { lastInteractionStamp: -999, acquaintances: {}, speech: [] },
+    social: { lastInteractionStamp: -999, acquaintances: {}, speech: [], classRoster: [], contacts: [], threads: {}, invitations: [], clubs: [], schoolOpportunities: {} },
+    phone: { unlocked:false, selectedContactId:null },
     notifications: { history: [], fastSummary: {}, lastRoutineRealTime: 0 },
-    events: { lastEventDay: -2, cooldowns: {} },
+    events: { lastEventDay: -2, cooldowns: {}, active: [], history: [], lastMajorDay: -10 },
+    settings: { lifeDifficulty:'realistic', seriousIllness:'rare', unexpectedDeath:'rare', teenPregnancy:'rare', cheating:'rare', substanceEvents:'mild', adultIntimacy:'fade', teenRomance:'age-appropriate' },
+    adulthood: { transitions: {}, playerChoice: null },
     flags: { tutorialShown: false, introShown: false, directControlUsed: false, stageMessages: [] },
     log: [
       { stamp: 0, day: 1, text: `${player.name} was born into the ${familyName} family as the ${birthOrder.label.toLowerCase()}.`, type: 'important' },
       { stamp: 0, day: 1, text: childcareDecision.childcare.reason, type: 'important' }
     ]
   };
+  initializeV7State(state, rng);
+  return state;
 }
 
 
@@ -513,13 +535,16 @@ export function hasFurniture(state, id) {
 export function addFurniture(state, id, roomId = null) {
   if (hasFurniture(state, id)) return false;
   const purchase = HOUSE_PURCHASES.find(item => item.id === id);
-  const resolvedRoom = roomId || purchase?.room || 'livingRoom';
-  state.household.home.furniture.push({ id, room: resolvedRoom, essential: Boolean(purchase?.priority >= 80), condition: 100, delivered: true });
+  let resolvedRoom = roomId || purchase?.room || 'livingRoom';
+  if (resolvedRoom === 'ownerBedroom') resolvedRoom = state.player.assignedRoomId || 'childBedroom';
+  if (resolvedRoom === 'yard') resolvedRoom = 'livingRoom';
+  const room = state.household.home.rooms.find(item => item.id === resolvedRoom);
+  state.household.home.furniture.push({ id, instanceId: `${id}-${resolvedRoom}-${Date.now()}`, room: resolvedRoom, floor: room?.floor || 0, ownerId: null, essential: Boolean(purchase?.priority >= 80), condition: 100, delivered: true });
   return true;
 }
 
 export function getActiveRooms(state) {
-  return state.household.home.rooms.filter(roomItem => roomItem.active);
+  return state.household.home.rooms.filter(roomItem => roomItem.active && (roomItem.floor ?? 0) === (state.household.home.currentFloor ?? 0));
 }
 
 export function roomExists(state, id) {
@@ -560,6 +585,7 @@ export function ensureStateShape(state) {
   state.speedIndex ??= 0;
   state.scene ??= 'home';
   state.siblings ??= [];
+  state.extendedFamily ??= [];
   state.nanny ??= null;
   state.family ??= { relationship: null, desiredChildren: 1, pregnancy: null, planningCooldownUntil: 5, lastPlanningCheck: -1 };
   state.family.desiredChildren ??= 2;
@@ -594,7 +620,7 @@ export function ensureStateShape(state) {
   state.log ??= [];
   state.town.residents ??= [];
   state.town.households ??= [];
-  for (const person of [state.player, ...state.parents, ...state.siblings, state.nanny].filter(Boolean)) {
+  for (const person of [state.player, ...state.parents, ...state.siblings, ...state.extendedFamily, state.nanny].filter(Boolean)) {
     person.currentGoal ??= null;
     person.activity ??= { type: 'waiting', remaining: 1, startedStamp: 0 };
     person.route ??= null;
@@ -620,6 +646,7 @@ export function ensureStateShape(state) {
     parent.originalJob ??= deepClone(parent.job);
     parent.careerStatus ??= parent.job?.id === 'caregiver' ? 'stayHome' : 'working';
   }
+  initializeV7State(state, new RNG(state.seed, state.rngState));
   return state;
 }
 
@@ -665,10 +692,10 @@ export function getFurnitureAnchor(stateOrItem, maybeItem = null) {
     if (item.id === 'basicTable') return HOME_ANCHORS.diningRoom.diningSet;
     return roomAnchors[item.id] || HOME_ANCHORS.livingRoom[item.id] || { x: 10, y: 10, w: 1, h: 1, facing: 'down' };
   }
-  const roomItem = state.household.home.rooms.find(roomEntry => roomEntry.id === item.room) || state.household.home.rooms.find(roomEntry => roomEntry.id === 'livingRoom');
+  const roomItem = state.household.home.rooms.find(roomEntry => roomEntry.id === item.room) || state.household.home.rooms.find(roomEntry => roomEntry.id === 'livingRoom') || state.household.home.rooms[0];
   const specs = {
     parentBed:{rx:.08,ry:.16,rw:.48,rh:.22}, crib:{rx:.68,ry:.16,rw:.20,rh:.22}, toddlerBed:{rx:.56,ry:.60,rw:.34,rh:.18},
-    childBed:{rx:.08,ry:.16,rw:.42,rh:.18}, siblingBed:{rx:.08,ry:.58,rw:.42,rh:.18}, studyDesk:{rx:.62,ry:.18,rw:.28,rh:.18}, dresser:{rx:.06,ry:.68,rw:.20,rh:.22},
+    childBed:{rx:.08,ry:.16,rw:.42,rh:.18}, siblingBed:{rx:.08,ry:.58,rw:.42,rh:.18}, teenBed:{rx:.08,ry:.16,rw:.46,rh:.20}, upperBedA:{rx:.08,ry:.16,rw:.46,rh:.20}, upperBedB:{rx:.08,ry:.16,rw:.46,rh:.20}, nannyBed:{rx:.08,ry:.16,rw:.46,rh:.20}, studyDesk:{rx:.62,ry:.18,rw:.28,rh:.18}, dresser:{rx:.06,ry:.68,rw:.20,rh:.22},
     fridge:{rx:.72,ry:.12,rw:.20,rh:.25}, stove:{rx:.72,ry:.56,rw:.20,rh:.20}, counter:{rx:.08,ry:.12,rw:.48,rh:.14}, dishRack:{rx:.10,ry:.42,rw:.28,rh:.12}, dishwasher:{rx:.42,ry:.52,rw:.23,rh:.22},
     basicTable:{rx:.23,ry:.28,rw:.55,rh:.30}, diningSet:{rx:.18,ry:.24,rw:.64,rh:.34},
     sofa:{rx:.08,ry:.64,rw:.46,rh:.18}, television:{rx:.14,ry:.12,rw:.32,rh:.14}, rug:{rx:.12,ry:.30,rw:.58,rh:.30}, bookshelf:{rx:.76,ry:.16,rw:.16,rh:.30}, plant:{rx:.80,ry:.72,rw:.12,rh:.12},
