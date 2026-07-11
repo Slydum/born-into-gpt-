@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1d2636" />
+  <title>Born Into — Generational Life Sim</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <div class="logo-mark" aria-hidden="true">BI</div>
+        <div>
+          <h1>Born Into</h1>
+          <p>Every life begins somewhere.</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="pauseBtn" class="icon-btn" title="Pause">Ⅱ</button>
+        <button id="speedBtn" class="pill-btn" title="Change speed">1×</button>
+        <button id="saveBtn" class="pill-btn">Save</button>
+        <button id="menuBtn" class="icon-btn" title="Menu">☰</button>
+      </div>
+    </header>
+
+    <section class="game-layout">
+      <div class="canvas-wrap">
+        <canvas id="game" width="704" height="576" aria-label="Born Into game world"></canvas>
+        <div id="toastLayer" aria-live="polite"></div>
+        <div id="interactionPrompt" class="interaction-prompt hidden">Press E to interact</div>
+      </div>
+
+      <aside id="sidePanel" class="side-panel">
+        <section class="identity-card">
+          <div id="portrait" class="portrait"></div>
+          <div class="identity-copy">
+            <span id="stageBadge" class="stage-badge">Baby</span>
+            <h2 id="playerName">New Life</h2>
+            <p id="ageLabel">Age 0</p>
+          </div>
+        </section>
+
+        <section class="world-card compact-grid">
+          <div><span>Day</span><strong id="dayLabel">1</strong></div>
+          <div><span>Time</span><strong id="timeLabel">07:00</strong></div>
+          <div><span>Place</span><strong id="placeLabel">Home</strong></div>
+          <div><span>Money</span><strong id="moneyLabel">₱0</strong></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title"><h3>Needs</h3><button id="needsToggle" class="text-btn">Details</button></div>
+          <div id="needsList" class="bars"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title"><h3>Family</h3><span id="familyMood">Stable</span></div>
+          <div id="familyList" class="family-list"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title"><h3>Current story</h3><span id="objectiveTag">Growing</span></div>
+          <p id="objectiveText" class="objective">Your life has just begun.</p>
+        </section>
+
+        <section class="panel-section log-section">
+          <div class="section-title"><h3>Memory</h3><button id="clearLogBtn" class="text-btn">Clear</button></div>
+          <div id="eventLog" class="event-log"></div>
+        </section>
+
+        <details class="dev-tools">
+          <summary>Test controls</summary>
+          <div class="dev-grid">
+            <button id="ageBtn">Age +1 year</button>
+            <button id="eventBtn">Trigger event</button>
+            <button id="childBtn">Add child</button>
+            <button id="deathBtn">Force death</button>
+          </div>
+        </details>
+      </aside>
+    </section>
+
+    <section class="controls" aria-label="Game controls">
+      <div class="dpad" aria-label="Touch movement controls">
+        <button data-dir="up">▲</button>
+        <button data-dir="left">◀</button>
+        <button data-dir="down">▼</button>
+        <button data-dir="right">▶</button>
+      </div>
+      <button id="actionBtn" class="action-button">Interact</button>
+      <button id="cryBtn" class="cry-button">Cry</button>
+      <div class="desktop-help"><kbd>WASD</kbd> Move &nbsp; <kbd>E</kbd> Interact &nbsp; <kbd>C</kbd> Cry &nbsp; <kbd>Space</kbd> Pause</div>
+    </section>
+  </main>
+
+  <div id="menuOverlay" class="overlay visible">
+    <div class="menu-panel pixel-frame">
+      <div class="menu-art" aria-hidden="true">
+        <div class="sun"></div>
+        <div class="house-art"><i></i><i></i><i></i></div>
+        <div class="family-art"><i></i><i></i><i></i></div>
+      </div>
+      <div class="menu-content">
+        <p class="eyebrow">A GENERATIONAL LIFE SIM</p>
+        <h2>Born Into</h2>
+        <p class="menu-intro">You do not choose your beginning. Live, grow, form a family, and continue through the lives of your children.</p>
+        <div id="mainMenuButtons" class="menu-buttons">
+          <button id="continueBtn" class="primary-btn">Continue life</button>
+          <button id="newGameBtn" class="secondary-btn">Begin a new life</button>
+          <button id="howBtn" class="ghost-btn">How to play</button>
+        </div>
+        <form id="newGameForm" class="new-game-form hidden">
+          <label>Character name<input id="nameInput" maxlength="18" placeholder="Random name" /></label>
+          <label>World seed<div class="input-row"><input id="seedInput" maxlength="24" placeholder="Leave blank for random" /><button type="button" id="randomSeedBtn">↻</button></div></label>
+          <div class="form-actions"><button type="button" id="backBtn" class="ghost-btn">Back</button><button type="submit" class="primary-btn">Be born</button></div>
+        </form>
+        <div id="howPanel" class="how-panel hidden">
+          <p><strong>Baby:</strong> Cry when your needs are low. Your caregivers may respond—or may be too overwhelmed.</p>
+          <p><strong>Toddler onward:</strong> Explore with WASD or the touch controls. Interact with nearby objects using E.</p>
+          <p><strong>Life:</strong> Time changes your stage, relationships, opportunities, and risks. Save data stays in your browser.</p>
+          <button id="howBackBtn" class="ghost-btn">Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalOverlay" class="overlay hidden">
+    <div class="story-modal pixel-frame">
+      <p id="modalEyebrow" class="eyebrow">LIFE EVENT</p>
+      <h2 id="modalTitle">A moment arrives</h2>
+      <p id="modalBody"></p>
+      <div id="modalChoices" class="modal-choices"></div>
+    </div>
+  </div>
+
+  <script src="./src/main.js"></script>
+</body>
+</html>
