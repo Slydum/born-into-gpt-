@@ -8,6 +8,7 @@ import { clamp, formatTime, seededPhase, titleCase } from './utils.js';
 import { drawTopDownCharacter } from './art.js';
 import { assignedSleepPosition, assignedSeatPosition } from './v7.js';
 import { FURNITURE_SPRITES, preloadFurnitureSprites, resolveFurnitureSprite, drawFurnitureSprite } from './furniture.js';
+import { preloadCharacterSprites } from './characterSprites.js';
 
 const ROOM_COLORS = {
   parentBedroom: ['#dfcda8', '#e7d7b6'],
@@ -42,6 +43,7 @@ export class Renderer {
     this.animationClock = 0;
     this.personHitboxes = [];
     this.furnitureSprites = preloadFurnitureSprites();
+    this.characterSprites = preloadCharacterSprites();
   }
 
   setState(state) {
@@ -555,7 +557,7 @@ export class Renderer {
     }
     const sittingActivities = new Set(['breakfast','lunch','dinner','eating','familyMeal','familyTime','conversation','relaxing','retirement','hobby','homework','study','childcare','playing']);
     const pose = person.activity?.type === 'sleeping' ? 'sleeping' : sittingActivities.has(person.activity?.type) ? 'sitting' : 'standing';
-    const box = drawTopDownCharacter(this.ctx, person, this.animationClock, { highlight: isPlayer, pose });
+    const box = drawTopDownCharacter(this.ctx, person, this.animationClock, { highlight: isPlayer, pose }, this.characterSprites);
     if (person.activity?.type === 'cooking' || (person.activity?.type === 'hobby' && person.activity?.hobbyId === 'cooking')) this.drawActivityBubble(person, '🍳');
     if (person.activity?.type === 'working' || person.activity?.type === 'remoteWork') this.drawActivityBubble(person, '▣');
     if (person.activity?.type === 'school' || person.activity?.type === 'homework') this.drawActivityBubble(person, '✎');

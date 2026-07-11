@@ -1,4 +1,5 @@
 import { clamp, seededPhase } from './utils.js';
+import { drawCharacterSprite } from './characterSprites.js';
 
 export const SKIN_TONES = ['#f6d0ac', '#e8b788', '#cf8f5f', '#a86542', '#6f3f2b'];
 export const HAIR_COLORS = ['#241b18', '#3b2923', '#60402c', '#8a5737', '#c28a52', '#9f4b31', '#c8c2b9'];
@@ -61,7 +62,7 @@ export function portraitMarkup(person, extraClass = '') {
   </div>`;
 }
 
-export function drawTopDownCharacter(ctx, person, animationClock, options = {}) {
+function drawFallbackCharacter(ctx, person, animationClock, options = {}) {
   const appearance = person.appearance || {};
   const stage = person.stage || 'adult';
   const scaleMap = { baby: 0.55, toddler: 0.72, child: 0.84, teen: 0.94, adult: 1, elder: 0.94 };
@@ -148,4 +149,11 @@ export function drawTopDownCharacter(ctx, person, animationClock, options = {}) 
   }
   ctx.restore();
   return { x, y, width: 36 * scale, height: 48 * scale };
+}
+
+
+export function drawTopDownCharacter(ctx, person, animationClock, options = {}, spriteImages = null) {
+  const spriteBox = drawCharacterSprite(ctx, spriteImages, person, animationClock, options);
+  if (spriteBox) return spriteBox;
+  return drawFallbackCharacter(ctx, person, animationClock, options);
 }
