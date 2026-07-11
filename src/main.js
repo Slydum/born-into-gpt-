@@ -17,6 +17,8 @@ const nameInput = document.getElementById('nameInput');
 const seedInput = document.getElementById('seedInput');
 const toastLayer = document.getElementById('toastLayer');
 const startupError = document.getElementById('startupError');
+const startupErrorText = document.getElementById('startupErrorText');
+const startupErrorClose = document.getElementById('startupErrorClose');
 
 let state = loadGame() || createNewGame('', 'born-into-preview');
 let rng = new RNG(state.seed, state.rngState);
@@ -80,6 +82,7 @@ function resetMenuPanels() {
 }
 
 function startLife(nextState, isNewLife = false) {
+  startupError.hidden = true;
   initializeSystems(nextState);
   gameStarted = true;
   saveGame(state);
@@ -92,9 +95,13 @@ function startLife(nextState, isNewLife = false) {
 }
 
 function showStartupError(message) {
-  startupError.textContent = message;
+  startupErrorText.textContent = message;
   startupError.hidden = false;
 }
+
+startupErrorClose.addEventListener('click', () => {
+  startupError.hidden = true;
+});
 
 initializeSystems(state);
 resetMenuPanels();
@@ -112,6 +119,7 @@ continueBtn.addEventListener('click', () => {
 });
 
 document.getElementById('newGameBtn').addEventListener('click', () => {
+  startupError.hidden = true;
   mainMenuButtons.classList.add('hidden');
   howPanel.classList.add('hidden');
   newGameForm.classList.remove('hidden');
@@ -250,5 +258,5 @@ requestAnimationFrame(frame);
 window.__BORN_INTO_READY__ = true;
 
 if (hasLegacySave() && !hasSave()) {
-  showStartupError('V7 uses a new save format. Begin a new life to use assigned beds, second floors, persistent friendships, phones, adult siblings, move-outs, and life events.');
+  showStartupError('Your older save cannot be opened in V7. Tap “Begin a new life” below to start playing.');
 }
