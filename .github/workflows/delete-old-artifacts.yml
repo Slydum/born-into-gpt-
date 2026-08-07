@@ -1,0 +1,29 @@
+name: One-time Actions artifact cleanup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/delete-old-artifacts.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale Actions artifacts
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listArtifactsForRepo({ owner, repo, per_page: 100 });
+            const artifacts = [...data.artifacts].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const keep = artifacts[0];
+            core.info(keep ? `Keeping newest artifact ${keep.id} (${keep.name})` : 'No artifacts found.');
+            for (const artifact of artifacts.slice(1)) {
+              core.info(`Deleting artifact ${artifact.id} (${artifact.name})`);
+              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+            }
